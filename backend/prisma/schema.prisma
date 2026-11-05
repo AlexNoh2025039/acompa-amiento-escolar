@@ -1,0 +1,410 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  parent
+  student
+}
+
+enum DayOfWeek {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+}
+
+enum TaskType {
+  homework
+  exam
+  reading
+}
+
+enum TaskStatus {
+  pending
+  in_progress
+  completed
+}
+
+enum TutorMessageRole {
+  student
+  assistant
+}
+
+enum AiUsagePurpose {
+  tutor
+  summary
+  practice
+  podcast
+  video
+}
+
+enum LearningArtifactType {
+  summary
+  practice
+  podcast
+  video
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users    User[]
+  children Child[]
+
+  @@map("families")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  familyId     String   @map("family_id")
+  role         Role
+  fullName     String   @map("full_name")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  family                 Family                  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  refreshTokens          RefreshToken[]
+  childProfile           Child?                  @relation("ChildLogin")
+  tasksCreated           Task[]                  @relation("TaskAuthor")
+  gradeChanges           ChildGradeHistory[]     @relation("GradeChangeAuthor")
+  notificationPreference NotificationPreference?
+  practiceAttempts       PracticeAttempt[]
+  tutorConversations     TutorConversation[]
+  passwordResetTokens    PasswordResetToken[]
+  aiUsage                AiUsage[]
+  learningArtifacts      LearningArtifact[]
+
+  @@index([familyId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Child {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  userId    String?  @unique @map("user_id")
+  fullName  String   @map("full_name")
+  birthDate DateTime @map("birth_date") @db.Date
+  grade     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family             Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user               User?               @relation("ChildLogin", fields: [userId], references: [id], onDelete: SetNull)
+  subjects           ChildSubject[]
+  schedule           ScheduleBlock[]
+  tasks              Task[]
+  evaluations        Evaluation[]
+  practiceAttempts   PracticeAttempt[]
+  tutorConversations TutorConversation[]
+  learningArtifacts  LearningArtifact[]
+  pointTransactions  PointTransaction[]
+  gradeHistory       ChildGradeHistory[]
+
+  @@index([familyId])
+  @@map("children")
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  children           ChildSubject[]
+  schedule           ScheduleBlock[]
+  tasks              Task[]
+  evaluations        Evaluation[]
+  practiceAttempts   PracticeAttempt[]
+  tutorConversations TutorConversation[]
+  learningArtifacts  LearningArtifact[]
+
+  @@map("subjects")
+}
+
+model ChildSubject {
+  id        String   @id @default(cuid())
+  childId   String   @map("child_id")
+  subjectId String   @map("subject_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  child   Child   @relation(fields: [childId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@unique([childId, subjectId])
+  @@map("child_subjects")
+}
+
+model ScheduleBlock {
+  id        String    @id @default(cuid())
+  childId   String    @map("child_id")
+  subjectId String?   @map("subject_id")
+  dayOfWeek DayOfWeek @map("day_of_week")
+  startTime String    @map("start_time") @db.VarChar(5)
+  endTime   String    @map("end_time") @db.VarChar(5)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  child   Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@map("schedule_blocks")
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  childId         String     @map("child_id")
+  createdByUserId String     @map("created_by_user_id")
+  subjectId       String?    @map("subject_id")
+  title           String
+  description     String?    @db.Text
+  type            TaskType
+  dueAt           DateTime?  @map("due_at")
+  status          TaskStatus @default(pending)
+  quizQuestions   Json?      @map("quiz_questions")
+  reviewedAt      DateTime?  @map("reviewed_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  child             Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdBy         User               @relation("TaskAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  subject           Subject?           @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  attachments       TaskAttachment[]
+  learningArtifacts LearningArtifact[]
+  practiceAttempt   PracticeAttempt?
+  pointTransactions PointTransaction[]
+
+  @@index([childId])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+model TaskAttachment {
+  id           String   @id @default(cuid())
+  taskId       String   @map("task_id")
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  storageKey   String   @map("storage_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_attachments")
+}
+
+model Evaluation {
+  id                String   @id @default(cuid())
+  childId           String   @map("child_id")
+  subjectId         String   @map("subject_id")
+  practiceAttemptId String?  @unique @map("practice_attempt_id")
+  title             String
+  score             Decimal  @db.Decimal(6, 2)
+  maxScore          Decimal  @map("max_score") @db.Decimal(6, 2)
+  evaluatedAt       DateTime @map("evaluated_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  child           Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  subject         Subject          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  practiceAttempt PracticeAttempt? @relation(fields: [practiceAttemptId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@map("evaluations")
+}
+
+model NotificationPreference {
+  id           String   @id @default(cuid())
+  userId       String   @unique @map("user_id")
+  emailSummary Boolean  @default(false) @map("email_summary")
+  reminderTime String?  @map("reminder_time") @db.VarChar(5)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model PracticeAttempt {
+  id          String    @id @default(cuid())
+  childId     String    @map("child_id")
+  userId      String    @map("user_id")
+  subjectId   String    @map("subject_id")
+  taskId      String?   @unique @map("task_id")
+  score       Int       @default(0)
+  total       Int
+  questions   Json
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  child            Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject          Subject           @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  task             Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  evaluation       Evaluation?
+  pointTransaction PointTransaction?
+
+  @@index([childId, createdAt])
+  @@index([userId, createdAt])
+  @@map("practice_attempts")
+}
+
+model PointTransaction {
+  id                String   @id @default(cuid())
+  childId           String   @map("child_id")
+  points            Int
+  reason            String
+  sourceType        String   @map("source_type")
+  sourceId          String   @map("source_id")
+  practiceAttemptId String?  @unique @map("practice_attempt_id")
+  taskId            String?  @map("task_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  child           Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  practiceAttempt PracticeAttempt? @relation(fields: [practiceAttemptId], references: [id], onDelete: SetNull)
+  task            Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceId])
+  @@index([childId, createdAt])
+  @@map("point_transactions")
+}
+
+model ChildGradeHistory {
+  id              String   @id @default(cuid())
+  childId         String   @map("child_id")
+  changedByUserId String   @map("changed_by_user_id")
+  fromGrade       String   @map("from_grade")
+  toGrade         String   @map("to_grade")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  changedBy User  @relation("GradeChangeAuthor", fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([childId, createdAt])
+  @@map("child_grade_history")
+}
+
+model TutorConversation {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  childId   String   @map("child_id")
+  subjectId String   @map("subject_id")
+  title     String   @default("Nueva conversación")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child    Child          @relation(fields: [childId], references: [id], onDelete: Cascade)
+  subject  Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  messages TutorMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([childId])
+  @@index([expiresAt])
+  @@map("tutor_conversations")
+}
+
+model TutorMessage {
+  id                   String           @id @default(cuid())
+  conversationId       String           @map("conversation_id")
+  role                 TutorMessageRole
+  content              String           @db.Text
+  attachmentStorageKey String?          @map("attachment_storage_key")
+  attachmentMimeType   String?          @map("attachment_mime_type")
+  attachmentName       String?          @map("attachment_name")
+  createdAt            DateTime         @default(now()) @map("created_at")
+
+  conversation TutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("tutor_messages")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model AiUsage {
+  id        String         @id @default(cuid())
+  userId    String         @map("user_id")
+  purpose   AiUsagePurpose
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("ai_usage")
+}
+
+model LearningArtifact {
+  id              String               @id @default(cuid())
+  userId          String               @map("user_id")
+  childId         String               @map("child_id")
+  subjectId       String               @map("subject_id")
+  taskId          String?              @map("task_id")
+  type            LearningArtifactType
+  title           String
+  content         String               @db.Text
+  storageKey      String?              @map("storage_key")
+  mimeType        String?              @map("mime_type")
+  durationSeconds Int?                 @map("duration_seconds")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child   Child   @relation(fields: [childId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  task    Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([childId, createdAt])
+  @@map("learning_artifacts")
+}
+
+model StorageDeletion {
+  id         String   @id @default(cuid())
+  storageKey String   @unique @map("storage_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("storage_deletions")
+}

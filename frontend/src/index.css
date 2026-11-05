@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.student-dashboard {
+  font-family: "Trebuchet MS", "Arial Rounded MT Bold", ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse at 10% 5%, rgb(219 232 243 / 32%), transparent 32rem),
+    #f7f9fb;
+}
+
+.student-dashboard main {
+  min-height: 100vh;
+}
+
+.student-card {
+  border-color: #e3e9ee;
+  background: #fff;
+  box-shadow: 0 2px 10px rgb(44 62 80 / 4%);
+}
+
+.student-hero {
+  border-color: #e3e9ee;
+  background: linear-gradient(115deg, #eef4f8 0%, #f6f8fa 100%);
+}
+
+.student-input {
+  border-color: #e1e4f0;
+  background-color: #fff;
+}
+
+.student-button {
+  background-color: #4b83a5;
+  box-shadow: 0 2px 5px rgb(49 91 120 / 12%);
+  transition: box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.student-button:hover:not(:disabled) {
+  background-color: #3e7394;
+  box-shadow: 0 3px 8px rgb(49 91 120 / 16%);
+}
+
+.dashboard-nav-scrollbar {
+  scrollbar-width: none;
+}
+
+.dashboard-nav-scrollbar::-webkit-scrollbar {
+  display: none;
+}

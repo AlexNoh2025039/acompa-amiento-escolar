@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+**/.env
+**/private-uploads/
+frontend/dist
+backend/dist
+backend/node_modules
+frontend/node_modules
+**/.vite/
+*.log
+.DS_Store

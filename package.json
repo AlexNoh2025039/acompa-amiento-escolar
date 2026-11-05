@@ -1,0 +1,13 @@
+{
+  "name": "aischool",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @aischool/backend --filter @aischool/frontend run dev",
+    "dev:backend": "pnpm --filter @aischool/backend dev",
+    "dev:frontend": "pnpm --filter @aischool/frontend dev",
+    "build": "pnpm --recursive --if-present build",
+    "test": "pnpm --filter @aischool/backend test",
+    "db:migrate": "pnpm --filter @aischool/backend db:migrate"
+  }
+}
