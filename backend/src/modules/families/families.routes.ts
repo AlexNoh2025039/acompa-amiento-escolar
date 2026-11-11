@@ -27,7 +27,8 @@ import {
   validateTaskFile,
 } from './uploads'
 import { processStorageDeletionQueue } from '../../services/storageDeletionService'
-import { practiceQuestions } from '../student/practiceQuestions'
+import { generateAcademicPractice, generateAcademicReadingPractice } from '../../services/learningContentService'
+import { getTaskReadingContent } from '../student/taskQuiz'
 
 export const familiesRouter = Router()
 const parentAccess = [requireAuth, requireRole('parent')] as const
@@ -614,7 +615,11 @@ familiesRouter.get(
       orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
     })
     res.json({
-      tasks: tasks.map(({ quizQuestions, ...task }) => ({ ...task, isQuiz: Boolean(quizQuestions) })),
+      tasks: tasks.map(({ quizQuestions, ...task }) => ({
+        ...task,
+        isQuiz: Boolean(quizQuestions),
+        readingContent: getTaskReadingContent(quizQuestions),
+      })),
     })
   }),
 )
@@ -627,27 +632,58 @@ familiesRouter.post(
     await findChild(req.params.childId, req.user!.familyId)
     await assertSubjectAssigned(req.params.childId, req.body.subjectId)
     const { createQuiz = false, ...taskInput } = req.body
+    const shouldCreateQuiz = createQuiz || taskInput.type === 'reading'
     let quizQuestions = null
-    if (createQuiz) {
-      if (taskInput.type !== 'exam' || !taskInput.subjectId) {
-        throw new AppError(400, 'QUIZ_REQUIRES_EXAM_SUBJECT', 'Un cuestionario necesita tipo Examen y una materia.')
+    let readingContent: string | null = null
+    if (shouldCreateQuiz) {
+      if (!taskInput.subjectId) {
+        throw new AppError(
+          400,
+          'QUIZ_REQUIRES_SUBJECT',
+          taskInput.type === 'reading'
+            ? 'Elige una materia para crear una lectura y preguntas relacionadas.'
+            : 'Un cuestionario necesita una materia.',
+        )
       }
       const child = await prisma.child.findUniqueOrThrow({
         where: { id: req.params.childId },
         select: { grade: true },
       })
-      quizQuestions = practiceQuestions(
-        (await prisma.subject.findUniqueOrThrow({ where: { id: taskInput.subjectId }, select: { name: true } })).name,
-        child.grade,
-      )
-      if (!quizQuestions) {
-        throw new AppError(400, 'QUIZ_UNAVAILABLE', 'Aún no hay cuestionarios para esta materia y grado. Prueba Matemáticas, Ciencias o Español.')
-      }
+      const subject = await prisma.subject.findUniqueOrThrow({
+        where: { id: taskInput.subjectId },
+        select: { name: true },
+      })
+      const generated = taskInput.type === 'reading'
+        ? await generateAcademicReadingPractice({
+            userId: req.user!.id,
+            subject: subject.name,
+            grade: child.grade,
+            title: taskInput.title,
+            description: taskInput.description,
+          })
+        : {
+            questions: await generateAcademicPractice({
+              userId: req.user!.id,
+              subject: subject.name,
+              grade: child.grade,
+              title: taskInput.title,
+              description: taskInput.description,
+            }),
+          }
+      const questions = generated.questions
+      readingContent = 'reading' in generated ? generated.reading : null
+      const questionsWithIds = questions.map((question, index) => ({
+        ...question,
+        id: 'id' in question ? question.id : `question-${index + 1}`,
+      }))
+      quizQuestions = readingContent
+        ? { reading: readingContent, questions: questionsWithIds }
+        : questionsWithIds
     }
     const task = await prisma.task.create({
       data: {
         ...taskInput,
-        ...(createQuiz ? { quizQuestions } : {}),
+        ...(shouldCreateQuiz ? { quizQuestions } : {}),
         childId: req.params.childId,
         createdByUserId: req.user!.id,
         subjectId: taskInput.subjectId || null,
@@ -657,7 +693,13 @@ familiesRouter.post(
       include: { subject: true, attachments: true },
     })
     const { quizQuestions: _questions, ...publicTask } = task
-    res.status(201).json({ task: { ...publicTask, isQuiz: Boolean(quizQuestions) } })
+    res.status(201).json({
+      task: {
+        ...publicTask,
+        isQuiz: Boolean(quizQuestions),
+        readingContent: getTaskReadingContent(quizQuestions),
+      },
+    })
   }),
 )
 
@@ -699,7 +741,13 @@ familiesRouter.patch(
       include: { subject: true, attachments: { select: { id: true, originalName: true, mimeType: true } } },
     })
     const { quizQuestions, ...publicTask } = task
-    res.json({ task: { ...publicTask, isQuiz: Boolean(quizQuestions) } })
+    res.json({
+      task: {
+        ...publicTask,
+        isQuiz: Boolean(quizQuestions),
+        readingContent: getTaskReadingContent(quizQuestions),
+      },
+    })
   }),
 )
 

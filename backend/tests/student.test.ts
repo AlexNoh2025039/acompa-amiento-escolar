@@ -18,6 +18,39 @@ function parent(email: string, fullName: string) {
   }
 }
 
+function mockAcademicPractice(
+  correctIndexes = [0, 0, 0, 0, 0],
+  response?: { reading: string; questions: ReturnType<typeof mockQuestion>[] },
+) {
+  const originalGeminiKey = env.GEMINI_API_KEY
+  const questions = response?.questions ?? correctIndexes.map((correctIndex, index) => mockQuestion(correctIndex, index))
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+    new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(response ? { reading: response.reading, questions } : { questions }) }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  ))
+  env.GEMINI_API_KEY = 'test-server-key'
+
+  return {
+    fetchMock,
+    restore() {
+      env.GEMINI_API_KEY = originalGeminiKey
+      fetchMock.mockRestore()
+    },
+  }
+}
+
+function mockQuestion(correctIndex: number, index: number) {
+  return {
+    prompt: index === 0
+      ? 'En la oración «Juan salió corriendo», ¿quién es el sujeto?'
+      : `Pregunta ${index + 1} sobre sujeto y predicado`,
+    options: ['Juan', 'Salió', 'Corriendo', 'La oración'],
+    correctIndex,
+    explanation: 'Juan es quien realiza la acción; por eso es el sujeto.',
+  }
+}
+
 async function resetDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
@@ -52,6 +85,11 @@ describe('student dashboard API', () => {
         practiceQuestions(subject, '5° primaria'),
       )
     }
+    expect(practiceQuestions('Matemática', '2° secundaria')).toBeNull()
+  })
+
+  it('uses generated academic content rather than generic study-skills questions for unknown subjects', () => {
+    expect(practiceQuestions('Literatura', '2° secundaria')).toBeNull()
   })
 
   it('lets a parent create a linked student account and the student log in', async () => {
@@ -218,6 +256,7 @@ describe('student dashboard API', () => {
       .post(`/api/families/me/children/${childId}/subjects`)
       .send({ name: 'Matemática' })
       .expect(201)
+    const generation = mockAcademicPractice([0, 1, 2, 3, 1])
     const assigned = await parentAgent
       .post(`/api/families/me/children/${childId}/tasks`)
       .send({
@@ -227,6 +266,7 @@ describe('student dashboard API', () => {
         createQuiz: true,
       })
       .expect(201)
+    generation.restore()
     const taskId = assigned.body.task.id as string
     expect(assigned.body.task.isQuiz).toBe(true)
     expect(assigned.body.task.quizQuestions).toBeUndefined()
@@ -279,6 +319,181 @@ describe('student dashboard API', () => {
     const overview = await parentAgent.get('/api/families/me/overview').expect(200)
     expect(overview.body.children[0].points).toBe(15)
     expect(overview.body.children[0].averageScore).toBe(20)
+  })
+
+  it('creates an interactive quiz for any task type', async () => {
+    const parentAgent = request.agent(app)
+    await parentAgent
+      .post('/api/auth/register')
+      .send(parent('parent@example.com', 'Padre Ejemplo'))
+      .expect(201)
+    const child = await parentAgent
+      .post('/api/families/me/children')
+      .send({ fullName: 'Alex Ejemplo', birthDate: '2015-03-15', grade: '5° primaria' })
+      .expect(201)
+    const subject = await parentAgent
+      .post(`/api/families/me/children/${child.body.child.id}/subjects`)
+      .send({ name: 'Matemática' })
+      .expect(201)
+
+    const generation = mockAcademicPractice()
+    const assigned = await parentAgent
+      .post(`/api/families/me/children/${child.body.child.id}/tasks`)
+      .send({
+        title: 'Fases de la Luna',
+        type: 'homework',
+        subjectId: subject.body.subject.id,
+        createQuiz: true,
+      })
+      .expect(201)
+    generation.restore()
+
+    expect(assigned.body.task.isQuiz).toBe(true)
+    expect(assigned.body.task.quizQuestions).toBeUndefined()
+
+    await parentAgent
+      .post(`/api/families/me/children/${child.body.child.id}/account`)
+      .send({ email: 'alex@example.com', password: 'alumno1234', confirmPassword: 'alumno1234' })
+      .expect(201)
+    const student = request.agent(app)
+    await student
+      .post('/api/auth/login')
+      .send({ email: 'alex@example.com', password: 'alumno1234' })
+      .expect(200)
+    const quiz = await student
+      .post('/api/student/practice/start')
+      .send({ taskId: assigned.body.task.id })
+      .expect(201)
+
+    expect(quiz.body.questions).toHaveLength(5)
+    expect(quiz.body.questions).toHaveLength(5)
+  })
+
+  it('generates grade-appropriate subject-specific questions for assignments and free practice', async () => {
+    const parentAgent = request.agent(app)
+    await parentAgent
+      .post('/api/auth/register')
+      .send(parent('parent@example.com', 'Padre Ejemplo'))
+      .expect(201)
+    const child = await parentAgent
+      .post('/api/families/me/children')
+      .send({ fullName: 'Alex Ejemplo', birthDate: '2019-03-15', grade: '1° primaria' })
+      .expect(201)
+    const childId = child.body.child.id as string
+    await parentAgent
+      .post(`/api/families/me/children/${childId}/account`)
+      .send({ email: 'alex@example.com', password: 'alumno1234', confirmPassword: 'alumno1234' })
+      .expect(201)
+    const subject = await parentAgent
+      .post(`/api/families/me/children/${childId}/subjects`)
+      .send({ name: 'Literatura' })
+      .expect(201)
+    const generation = mockAcademicPractice()
+    const { fetchMock } = generation
+
+    try {
+      const assigned = await parentAgent
+        .post(`/api/families/me/children/${childId}/tasks`)
+        .send({
+          title: 'Sujeto y predicado',
+          description: 'Identifica el sujeto en oraciones como Juan salió corriendo.',
+          type: 'homework',
+          subjectId: subject.body.subject.id,
+          createQuiz: true,
+        })
+        .expect(201)
+      const generationRequest = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+      expect(generationRequest.contents[0].parts[0].text).toContain('Materia: Literatura')
+      expect(generationRequest.contents[0].parts[0].text).toContain('Sujeto y predicado')
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('preguntas meta')
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('primeros grados de primaria')
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('TODAS las materias')
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('historia, geografía, ciencias, tecnología, arte')
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('No uses álgebra, variables, ecuaciones, definiciones abstractas ni fórmulas avanzadas de ninguna materia')
+
+      const student = request.agent(app)
+      await student
+        .post('/api/auth/login')
+        .send({ email: 'alex@example.com', password: 'alumno1234' })
+        .expect(200)
+      const assignedQuiz = await student
+        .post('/api/student/practice/start')
+        .send({ taskId: assigned.body.task.id })
+        .expect(201)
+      expect(assignedQuiz.body.questions[0].prompt).toContain('¿quién es el sujeto?')
+
+      const freePractice = await student
+        .post('/api/student/practice/start')
+        .send({ subjectId: subject.body.subject.id })
+        .expect(201)
+      expect(freePractice.body.questions[0].prompt).toContain('¿quién es el sujeto?')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      generation.restore()
+    }
+  })
+
+  it('creates a short reading and reading-comprehension quiz when a reading task is assigned', async () => {
+    const parentAgent = request.agent(app)
+    await parentAgent
+      .post('/api/auth/register')
+      .send(parent('parent@example.com', 'Padre Ejemplo'))
+      .expect(201)
+    const child = await parentAgent
+      .post('/api/families/me/children')
+      .send({ fullName: 'Alex Ejemplo', birthDate: '2019-03-15', grade: '1° primaria' })
+      .expect(201)
+    const childId = child.body.child.id as string
+    await parentAgent
+      .post(`/api/families/me/children/${childId}/account`)
+      .send({ email: 'alex@example.com', password: 'alumno1234', confirmPassword: 'alumno1234' })
+      .expect(201)
+    const subject = await parentAgent
+      .post(`/api/families/me/children/${childId}/subjects`)
+      .send({ name: 'Ciencias Naturales' })
+      .expect(201)
+    const reading = 'La mariposa visita las flores del jardín. Al tocar una flor, recoge un poco de polen. Luego vuela a otra flor y deja allí parte del polen. Así ayuda a las plantas a formar semillas. La mariposa también busca néctar, que es un alimento dulce. En el jardín viven muchos seres vivos que se ayudan entre sí.'
+    const questions = Array.from({ length: 5 }, (_, index) => ({
+      prompt: index === 0 ? 'Según la lectura, ¿qué recoge la mariposa al tocar una flor?' : `Pregunta ${index + 1} sobre la lectura`,
+      options: ['Polen', 'Agua', 'Arena', 'Hojas'],
+      correctIndex: 0,
+      explanation: 'La lectura dice que recoge polen al tocar una flor.',
+    }))
+    const generation = mockAcademicPractice([0, 0, 0, 0, 0], { reading, questions })
+    const { fetchMock } = generation
+
+    try {
+      const task = await parentAgent
+        .post(`/api/families/me/children/${childId}/tasks`)
+        .send({
+          title: 'La mariposa y las flores',
+          type: 'reading',
+          subjectId: subject.body.subject.id,
+        })
+        .expect(201)
+      expect(task.body.task.isQuiz).toBe(true)
+      expect(task.body.task.readingContent).toBe(reading)
+
+      const generationRequest = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('preguntas de comprensión basadas exclusivamente')
+      expect(generationRequest.systemInstruction.parts[0].text).toContain('80 a 130 palabras')
+
+      const student = request.agent(app)
+      await student
+        .post('/api/auth/login')
+        .send({ email: 'alex@example.com', password: 'alumno1234' })
+        .expect(200)
+      const profile = await student.get('/api/student/me').expect(200)
+      expect(profile.body.tasks[0].readingContent).toBe(reading)
+      const practice = await student
+        .post('/api/student/practice/start')
+        .send({ taskId: task.body.task.id })
+        .expect(201)
+      expect(practice.body.reading).toBe(reading)
+      expect(practice.body.questions[0].prompt).toContain('¿qué recoge la mariposa')
+    } finally {
+      generation.restore()
+    }
   })
 
   it('rejects duplicate student logins and refuses student API access without a linked child', async () => {

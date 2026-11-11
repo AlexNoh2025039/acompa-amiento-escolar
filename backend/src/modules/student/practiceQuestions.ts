@@ -101,10 +101,10 @@ const languageQuestionsByBand: Record<1 | 2 | 3, [string, string[], number, stri
 
 export function practiceQuestions(subjectName: string, grade: string): PracticeQuestion[] | null {
   const normalized = subjectName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  const gradeNumber = Number(grade.match(/\d+/)?.[0] ?? 1)
-  const level = Math.min(6, Math.max(1,
-    gradeNumber + (/secundaria/i.test(grade) ? 6 : /prepa|bachillerato|high school/i.test(grade) ? 9 : 0),
-  ))
+  const normalizedGrade = grade.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const gradeNumber = Number(grade.match(/\d+/)?.[0] ?? 0)
+  if (!normalizedGrade.includes('primaria') || gradeNumber < 1 || gradeNumber > 6) return null
+  const level = gradeNumber
   const gradeBand = Math.ceil(level / 2) as 1 | 2 | 3
   const source = normalized.includes('matemat') || normalized.includes('math')
     ? mathQuestionsByGrade[level]
@@ -112,9 +112,10 @@ export function practiceQuestions(subjectName: string, grade: string): PracticeQ
       ? scienceQuestionsByBand[gradeBand]
       : normalized.includes('espanol') || normalized.includes('lectura') || normalized.includes('lengua')
         ? languageQuestionsByBand[gradeBand]
-        : null
+        : undefined
   if (!source) return null
-  return source.map(([prompt, options, correctIndex, explanation], index) => ({
+  const questions = source
+  return questions.map(([prompt, options, correctIndex, explanation], index) => ({
     id: `${normalized}-${level}-${index + 1}`,
     prompt,
     options,

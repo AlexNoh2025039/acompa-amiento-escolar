@@ -18,6 +18,7 @@ type Task = {
   subject: Subject | null
   attachments: Attachment[]
   isQuiz: boolean
+  readingContent: string | null
 }
 type Schedule = {
   id: string
@@ -44,6 +45,7 @@ type PracticeQuestion = { id: string; prompt: string; options: string[] }
 type PracticeSession = {
   token: string
   subject: Subject
+  reading?: string
   questions: PracticeQuestion[]
 }
 type PracticeResult = {
@@ -523,6 +525,12 @@ export function StudentDashboard() {
                       <h3 className={`mt-1 font-semibold ${task.status === 'completed' ? 'line-through opacity-70' : ''}`}>{task.title}</h3>
                       {task.isQuiz ? <p className="mt-1 text-sm font-medium text-primary">Cuestionario · completa para ganar 10 puntos</p> : null}
                       {task.description ? <p className="mt-1 whitespace-pre-wrap text-sm text-tertiary/80">{task.description}</p> : null}
+                      {task.readingContent ? (
+                        <div className="mt-3 rounded-lg bg-page p-3">
+                          <h4 className="font-semibold">Lectura</h4>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-tertiary/85">{task.readingContent}</p>
+                        </div>
+                      ) : null}
                       {task.dueAt ? <p className={`mt-2 text-sm ${dueToday(task.dueAt) ? 'font-semibold text-accent' : ''}`}>
                         {dueToday(task.dueAt) ? 'Vence hoy · ' : 'Vence · '}{new Date(task.dueAt).toLocaleString('es')}
                       </p> : null}
@@ -646,6 +654,12 @@ export function StudentDashboard() {
                   <span>{quiz.subject.name}</span>
                   <span>Pregunta {questionIndex + 1} de {quiz.questions.length}</span>
                 </div>
+                {quiz.reading ? (
+                  <div className="mt-3 rounded-lg border border-line bg-card p-4">
+                    <h3 className="font-semibold">Lee el texto antes de responder</h3>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{quiz.reading}</p>
+                  </div>
+                ) : null}
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
                   <div className="h-full bg-secondary" style={{ width: `${((questionIndex + 1) / quiz.questions.length) * 100}%` }} />
                 </div>

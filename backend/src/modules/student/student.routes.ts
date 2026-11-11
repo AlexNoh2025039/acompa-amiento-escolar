@@ -9,9 +9,10 @@ import { readPrivateFile } from '../families/uploads'
 import { requireAuth, requireRole } from '../../middleware/requireAuth'
 import { validateBody } from '../../middleware/validate'
 import { getStudentChild } from './student.service'
+import { getTaskReadingContent, parseTaskQuiz, practiceQuestionSchema } from './taskQuiz'
 import { tutorRouter } from './tutor.routes'
 import { getAiQuota } from '../../services/aiQuotaService'
-import { createLearningArtifact } from '../../services/learningContentService'
+import { createLearningArtifact, generateAcademicPractice } from '../../services/learningContentService'
 import { practiceQuestions } from './practiceQuestions'
 
 export const studentRouter = Router()
@@ -29,14 +30,6 @@ const taskStatusSchema = z.object({
 const practiceAnswersSchema = z.object({
   token: z.string().min(1),
   answers: z.array(z.number().int().min(0).max(3)).min(1).max(5),
-})
-
-const practiceQuestionSchema = z.object({
-  id: z.string(),
-  prompt: z.string(),
-  options: z.array(z.string()).length(4),
-  correctIndex: z.number().int().min(0).max(3),
-  explanation: z.string(),
 })
 
 studentRouter.use('/tutor', tutorRouter)
@@ -152,6 +145,7 @@ studentRouter.get(
       tasks: tasks.map(({ quizQuestions, ...task }) => ({
         ...task,
         isQuiz: Boolean(quizQuestions),
+        readingContent: getTaskReadingContent(quizQuestions),
       })),
     })
   }),
@@ -195,7 +189,13 @@ studentRouter.patch(
       include: { subject: true, attachments: { select: { id: true, originalName: true, mimeType: true } } },
     })
     const { quizQuestions, ...publicTask } = task
-    res.json({ task: { ...publicTask, isQuiz: Boolean(quizQuestions) } })
+    res.json({
+      task: {
+        ...publicTask,
+        isQuiz: Boolean(quizQuestions),
+        readingContent: getTaskReadingContent(quizQuestions),
+      },
+    })
   }),
 )
 
@@ -232,8 +232,9 @@ studentRouter.post(
     }
     const child = await getStudentChild(req.user!.id, req.user!.familyId)
     let subject: { id: string; name: string } | undefined
-    let questions: z.infer<typeof practiceQuestionSchema>[] | null
+    let questions: z.infer<typeof practiceQuestionSchema>[]
     let taskId: string | undefined
+    let reading: string | null = null
     let existingAttempt: { id: string; completedAt: Date | null } | null = null
     if ('artifactId' in parsed.data) {
       const artifact = await prisma.learningArtifact.findFirst({
@@ -282,7 +283,9 @@ studentRouter.post(
         throw new AppError(403, 'SUBJECT_NOT_ASSIGNED', 'Este cuestionario ya no pertenece a una materia asignada.')
       }
       subject = task.subject
-      questions = z.array(practiceQuestionSchema).min(1).max(5).parse(task.quizQuestions)
+      const taskQuiz = parseTaskQuiz(task.quizQuestions)
+      reading = taskQuiz.reading
+      questions = taskQuiz.questions
       taskId = task.id
       existingAttempt = task.practiceAttempt
       if (existingAttempt?.completedAt) {
@@ -298,14 +301,14 @@ studentRouter.post(
         throw new AppError(400, 'SUBJECT_NOT_ASSIGNED', 'Elige una materia de tu perfil')
       }
       subject = assignedSubject.subject
-      questions = practiceQuestions(subject.name, child.grade)
-      if (!questions) {
-        throw new AppError(
-          400,
-          'PRACTICE_UNAVAILABLE',
-          'Aún no hay preguntas de práctica para esta materia. Prueba Matemática, Ciencias o Español.',
-        )
-      }
+      questions = practiceQuestions(subject.name, child.grade) ?? await generateAcademicPractice({
+        userId: req.user!.id,
+        subject: subject.name,
+        grade: child.grade,
+      }).then((generated) => generated.map((question, index) => ({
+        ...question,
+        id: `generated-${index + 1}`,
+      })))
     }
     const attempt = existingAttempt
       ? existingAttempt
@@ -328,6 +331,7 @@ studentRouter.post(
     res.status(201).json({
       token,
       subject,
+      ...(reading ? { reading } : {}),
       questions: questions.map(({ correctIndex: _answer, ...question }) => question),
     })
   }),

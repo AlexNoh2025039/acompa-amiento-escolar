@@ -32,6 +32,7 @@ type Task = {
   subject: Subject | null
   attachments: Attachment[]
   isQuiz: boolean
+  readingContent: string | null
   reviewedAt: string | null
 }
 type Evaluation = {
@@ -606,7 +607,7 @@ export function ParentDashboard() {
             title: taskTitle,
             description: taskDescription || null,
             type: taskType,
-            createQuiz: taskCreateQuiz,
+            createQuiz: taskCreateQuiz || taskType === 'reading',
             dueAt: taskDueAt ? new Date(taskDueAt).toISOString() : null,
             subjectId: taskSubject || null,
           }),
@@ -619,7 +620,11 @@ export function ParentDashboard() {
       setTaskSubject('')
       setTaskCreateQuiz(false)
       await refreshOverview()
-    }, taskCreateQuiz ? 'Cuestionario asignado. El alumno recibirá preguntas de su grado actual.' : 'Tarea agregada.')
+    }, taskType === 'reading'
+      ? 'Lectura breve y cuestionario de comprensión asignados.'
+      : taskCreateQuiz
+        ? 'Cuestionario asignado con preguntas adaptadas al grado.'
+        : 'Tarea agregada.')
   }
 
   async function handleReviewTask(task: Task) {
@@ -1147,14 +1152,19 @@ export function ParentDashboard() {
                         {Object.entries(taskTypes).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
                       </select>
                     </label>
-                    <label><span className={labelClass}>Materia (opcional)</span>
-                      <select className={controlClass} value={taskSubject} onChange={(event) => setTaskSubject(event.target.value)}>
+                    <label><span className={labelClass}>Materia{taskType === 'reading' ? '' : ' (opcional)'}</span>
+                      <select className={controlClass} value={taskSubject} onChange={(event) => setTaskSubject(event.target.value)} required={taskType === 'reading'}>
                         <option value="">Sin materia</option>
                         {selectedChild.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                       </select>
                     </label>
                   </div>
-                  {taskType === 'exam' ? (
+                  {taskType === 'reading' ? (
+                    <p className="rounded-lg bg-page p-3 text-sm text-tertiary/75">
+                      Se generará una lectura breve sobre la materia y el tema, seguida de preguntas de comprensión adaptadas a {selectedChild.grade}.
+                      {!taskSubject ? ' Elige una materia para continuar.' : ''}
+                    </p>
+                  ) : (
                     <label className="flex items-start gap-2 rounded-lg bg-page p-3 text-sm">
                       <input
                         type="checkbox"
@@ -1166,12 +1176,12 @@ export function ParentDashboard() {
                       <span>
                         <strong>Crear cuestionario interactivo</strong>
                         <span className="block text-tertiary/70">
-                          Usa preguntas de {selectedChild.grade} y permite que el alumno lo responda aquí.
+                          Genera con IA preguntas reales sobre la materia y el tema, adaptadas a {selectedChild.grade}.
                           {!taskSubject ? ' Elige una materia para activarlo.' : ''}
                         </span>
                       </span>
                     </label>
-                  ) : null}
+                  )}
                   <label><span className={labelClass}>Vencimiento (opcional)</span>
                     <input className={controlClass} type="datetime-local" value={taskDueAt} onChange={(event) => setTaskDueAt(event.target.value)} />
                   </label>
@@ -1197,6 +1207,12 @@ export function ParentDashboard() {
                         {task.isQuiz ? <p className="mt-1 text-sm font-medium text-primary">📝 Cuestionario interactivo</p> : null}
                         {task.reviewedAt ? <p className="mt-1 text-sm text-success">Revisada · +5 puntos</p> : null}
                         {task.description ? <p className="mt-1 whitespace-pre-wrap text-sm text-tertiary/80">{task.description}</p> : null}
+                        {task.readingContent ? (
+                          <div className="mt-3 rounded-lg bg-page p-3">
+                            <h4 className="font-semibold">Lectura generada</h4>
+                            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-tertiary/85">{task.readingContent}</p>
+                          </div>
+                        ) : null}
                         {task.dueAt ? <p className="mt-2 text-sm">Vence: {new Date(task.dueAt).toLocaleString('es')}</p> : null}
                       </div>
                       <button type="button" className="text-sm text-accent" onClick={() => void handleDeleteTask(task)}>Eliminar</button>
