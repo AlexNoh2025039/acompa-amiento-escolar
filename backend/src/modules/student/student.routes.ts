@@ -165,7 +165,15 @@ studentRouter.patch(
     const child = await getStudentChild(req.user!.id, req.user!.familyId)
     const existing = await prisma.task.findFirst({
       where: { id: req.params.taskId, childId: child.id },
-      select: { id: true, quizQuestions: true, practiceAttempt: { select: { completedAt: true } } },
+      select: {
+        id: true,
+        quizQuestions: true,
+        practiceAttempts: {
+          where: { completedAt: { not: null } },
+          take: 1,
+          select: { id: true },
+        },
+      },
     })
     if (!existing) {
       throw new AppError(404, 'NOT_FOUND', 'No encontramos esta actividad')
@@ -173,7 +181,7 @@ studentRouter.patch(
     if (
       req.body.status === 'completed' &&
       existing.quizQuestions &&
-      !existing.practiceAttempt?.completedAt
+      existing.practiceAttempts.length === 0
     ) {
       throw new AppError(400, 'QUIZ_NOT_COMPLETED', 'Responde el cuestionario antes de marcarlo como completado.')
     }
@@ -273,7 +281,12 @@ studentRouter.post(
           id: true,
           subject: { select: { id: true, name: true } },
           quizQuestions: true,
-          practiceAttempt: { select: { id: true, completedAt: true } },
+          practiceAttempts: {
+            where: { completedAt: null },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { id: true, completedAt: true },
+          },
         },
       })
       if (!task?.subject || !task.quizQuestions) {
@@ -287,10 +300,7 @@ studentRouter.post(
       reading = taskQuiz.reading
       questions = taskQuiz.questions
       taskId = task.id
-      existingAttempt = task.practiceAttempt
-      if (existingAttempt?.completedAt) {
-        throw new AppError(409, 'PRACTICE_ALREADY_SUBMITTED', 'Este cuestionario ya fue respondido.')
-      }
+      existingAttempt = task.practiceAttempts[0] ?? null
     } else {
       const subjectId = 'subjectId' in parsed.data ? parsed.data.subjectId : undefined
       if (!subjectId) {

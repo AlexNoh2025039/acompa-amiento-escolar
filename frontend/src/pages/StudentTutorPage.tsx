@@ -228,8 +228,8 @@ export function StudentTutorPage() {
           </Link>
         </header>
 
-        <p className="rounded-lg border border-secondary/50 bg-card p-3 text-sm text-tertiary/80" role="note">
-          💡 Pregunta lo que quieras aprender o adjunta una foto/PDF de un ejercicio. Tu pregunta, archivo y grado se envían a Google Gemini para crear pistas. No compartas datos personales; solo tú puedes leer tus conversaciones y se eliminan después de 30 días sin actividad.
+        <p className="student-tutor-notice rounded-lg border border-secondary/50 bg-card p-3 text-sm text-tertiary/80" role="note">
+          💡 Puedes escribir una pregunta o subir una foto de tu ejercicio. Para darte pistas, tu pregunta, el archivo y tu grado se envían a Google Gemini. No escribas tu dirección, teléfono ni contraseña. Solo tú puedes leer tus conversaciones; se borran después de 30 días sin actividad.
         </p>
         {quota ? (
           <p className="rounded-lg border border-line bg-card p-3 text-sm text-tertiary/80">
@@ -239,7 +239,7 @@ export function StudentTutorPage() {
 
         {error ? <p className="rounded-md bg-card p-3 text-sm text-accent" role="alert">{error}</p> : null}
 
-        <div id="tutor" className="grid scroll-mt-32 gap-5 lg:grid-cols-[280px_1fr]">
+        <div id="tutor" className="student-tutor-grid grid scroll-mt-32 gap-5 lg:grid-cols-[280px_1fr]">
           <aside className={`${cardClass} h-fit`}>
             <h2 className="text-lg font-extrabold">💬 Mis conversaciones</h2>
             <label className="mt-3 block">
@@ -287,9 +287,9 @@ export function StudentTutorPage() {
                   </button>
                 </div>
 
-                <div className="flex-1 space-y-4 overflow-y-auto py-5" aria-live="polite">
+                <div className="student-chat-thread flex-1 space-y-4 overflow-y-auto py-5" aria-live="polite">
                   {messages.map((message) => (
-                    <article key={message.id} className={`max-w-[90%] rounded-3xl p-4 shadow-sm ${message.role === 'student' ? 'ml-auto bg-primary text-white' : 'mr-auto border border-violet-100 bg-violet-50'}`}>
+                    <article key={message.id} className={`student-chat-message max-w-[90%] rounded-3xl p-4 shadow-sm ${message.role === 'student' ? 'ml-auto bg-primary text-white' : 'mr-auto border border-violet-100 bg-violet-50'}`}>
                       <p className="mb-1 text-xs font-bold">{message.role === 'student' ? '😊 Tú' : '🤖 Tu tutor'}</p>
                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
                       {message.attachment ? (

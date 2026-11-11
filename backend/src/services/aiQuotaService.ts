@@ -8,9 +8,9 @@ const quotaWindowMs = 24 * 60 * 60 * 1000
 export async function getAiQuota(userId: string) {
   const resetAt = new Date(Date.now() - quotaWindowMs)
   const [used, oldest] = await Promise.all([
-    prisma.aiUsage.count({ where: { userId, createdAt: { gt: resetAt } } }),
+    prisma.aiUsage.count({ where: { userId, purpose: { not: 'practice' }, createdAt: { gt: resetAt } } }),
     prisma.aiUsage.findFirst({
-      where: { userId, createdAt: { gt: resetAt } },
+      where: { userId, purpose: { not: 'practice' }, createdAt: { gt: resetAt } },
       orderBy: { createdAt: 'asc' },
       select: { createdAt: true },
     }),
@@ -28,7 +28,7 @@ export async function reserveAiUsage(userId: string, purpose: AiUsagePurpose) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${userId})) IS NULL`
     const resetAt = new Date(Date.now() - quotaWindowMs)
     const used = await tx.aiUsage.count({
-      where: { userId, createdAt: { gt: resetAt } },
+      where: { userId, purpose: { not: 'practice' }, createdAt: { gt: resetAt } },
     })
     if (used >= env.AI_DAILY_LIMIT) {
       throw new AppError(429, 'AI_DAILY_LIMIT', 'Ya usaste tus solicitudes de IA disponibles por hoy. Inténtalo de nuevo cuando se renueve tu límite.')

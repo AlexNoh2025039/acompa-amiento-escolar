@@ -198,7 +198,7 @@ model Task {
   subject           Subject?           @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   attachments       TaskAttachment[]
   learningArtifacts LearningArtifact[]
-  practiceAttempt   PracticeAttempt?
+  practiceAttempts  PracticeAttempt[]
   pointTransactions PointTransaction[]
 
   @@index([childId])
@@ -258,7 +258,7 @@ model PracticeAttempt {
   childId     String    @map("child_id")
   userId      String    @map("user_id")
   subjectId   String    @map("subject_id")
-  taskId      String?   @unique @map("task_id")
+  taskId      String?   @map("task_id")
   score       Int       @default(0)
   total       Int
   questions   Json
@@ -274,6 +274,7 @@ model PracticeAttempt {
 
   @@index([childId, createdAt])
   @@index([userId, createdAt])
+  @@index([taskId])
   @@map("practice_attempts")
 }
 

@@ -89,15 +89,26 @@ type AiQuota = {
   resetsAt: string | null
 }
 
+const weekDays = [
+  { id: 'monday', label: 'Lunes' },
+  { id: 'tuesday', label: 'Martes' },
+  { id: 'wednesday', label: 'Miércoles' },
+  { id: 'thursday', label: 'Jueves' },
+  { id: 'friday', label: 'Viernes' },
+  { id: 'saturday', label: 'Sábado' },
+  { id: 'sunday', label: 'Domingo' },
+]
+
 const studentNavigation: DashboardNavItem[] = [
   { id: 'inicio', label: 'Inicio' },
-  { id: 'cursos', label: 'Mis cursos' },
-  { id: 'actividades', label: 'Tareas y actividades' },
-  { id: 'horario', label: 'Mi horario' },
+  { id: 'avisos', label: 'Avisos' },
+  { id: 'cursos', label: 'Mis materias' },
+  { id: 'actividades', label: 'Mis tareas' },
+  { id: 'horario', label: 'Mi semana' },
   { id: 'practica', label: 'Practicar' },
-  { id: 'tutor', label: 'Tutor de estudio', href: '/tutor' },
-  { id: 'resultados', label: 'Mis resultados' },
-  { id: 'materiales', label: 'Materiales' },
+  { id: 'tutor', label: 'Pregúntale al tutor', href: '/tutor' },
+  { id: 'resultados', label: 'Mis logros' },
+  { id: 'materiales', label: 'Mis materiales' },
 ]
 
 const taskTypeNames: Record<Task['type'], string> = {
@@ -152,6 +163,16 @@ function dueToday(dueAt: string | null) {
   return Boolean(dueAt && new Date(dueAt).toDateString() === new Date().toDateString())
 }
 
+function daysUntilDue(dueAt: string) {
+  const dueDate = new Date(dueAt)
+  if (Number.isNaN(dueDate.getTime())) return null
+
+  const today = new Date()
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const dueUtc = Date.UTC(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
+  return Math.round((dueUtc - todayUtc) / 86_400_000)
+}
+
 export function StudentDashboard() {
   const { setUser } = useAuth()
   const [data, setData] = useState<StudentData | null>(null)
@@ -176,13 +197,47 @@ export function StudentDashboard() {
 
   const age = useMemo(() => (data ? calculateAge(data.student.birthDate) : null), [data])
   const todaysSchedule = useMemo(
-    () => data?.schedules.filter((block) => block.dayOfWeek === localDay()) ?? [],
+    () =>
+      data?.schedules
+        .filter((block) => block.dayOfWeek === localDay())
+        .sort((first, second) => first.startTime.localeCompare(second.startTime)) ?? [],
     [data],
   )
   const openTasks = useMemo(
     () => data?.tasks.filter((task) => task.status !== 'completed') ?? [],
     [data],
   )
+  const notificationTasks = useMemo(
+    () =>
+      openTasks
+        .filter((task) => {
+          if (!task.dueAt) return false
+          const days = daysUntilDue(task.dueAt)
+          return days !== null && days <= 7
+        })
+        .sort((first, second) => Date.parse(first.dueAt!) - Date.parse(second.dueAt!)),
+    [openTasks],
+  )
+  const orderedTasks = useMemo(
+    () =>
+      [...(data?.tasks ?? [])].sort((first, second) => {
+        if (first.status === 'completed' && second.status !== 'completed') return 1
+        if (first.status !== 'completed' && second.status === 'completed') return -1
+        if (!first.dueAt) return second.dueAt ? 1 : 0
+        if (!second.dueAt) return -1
+        return Date.parse(first.dueAt) - Date.parse(second.dueAt)
+      }),
+    [data],
+  )
+  const weeklySchedule = useMemo(() => {
+    const schedules = [...(data?.schedules ?? [])].sort((first, second) =>
+      first.startTime.localeCompare(second.startTime),
+    )
+    return weekDays.map((day) => ({
+      ...day,
+      blocks: schedules.filter((block) => block.dayOfWeek === day.id),
+    }))
+  }, [data])
 
   useEffect(() => {
     let cancelled = false
@@ -412,12 +467,15 @@ export function StudentDashboard() {
         <DashboardModule id="inicio">
         <header id="inicio" className="student-hero flex scroll-mt-32 flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 shadow-sm sm:p-8">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary">Mi espacio de aprendizaje</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">¡Tu aventura de aprendizaje!</p>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-tertiary sm:text-4xl">¡Hola, {data.student.fullName}!</h1>
-            <p className="mt-2 font-medium text-tertiary/75">{data.student.grade} · {data.student.familyName}</p>
+            <p className="mt-2 font-medium text-tertiary/75">¿Listo para descubrir algo nuevo hoy?</p>
+            <span className="mt-3 inline-flex rounded-full border border-white/80 bg-white/70 px-3 py-1 text-sm font-bold text-tertiary">
+              📚 {data.student.grade}
+            </span>
           </div>
           <div className="flex items-center gap-3">
-            <p className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-primary">{data.student.points} puntos</p>
+            <p className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-primary">⭐ {data.student.points} puntos</p>
             <p className="hidden rounded-full bg-white/80 px-4 py-2 text-sm font-semibold capitalize sm:block">{todayName}</p>
             <button type="button" className="rounded-xl border border-white bg-white/80 px-4 py-2.5 text-sm font-bold text-tertiary hover:bg-white" onClick={() => void handleLogout()} disabled={loggingOut}>
               {loggingOut ? 'Saliendo…' : 'Salir'}
@@ -435,7 +493,7 @@ export function StudentDashboard() {
             <div>
               <p className="font-bold">Ayuda para estudiar</p>
               <p className="text-sm text-tertiary/75">
-                Te quedan {quota.remaining} de {quota.limit} ayudas con IA para hoy. Se comparten entre el tutor, la práctica y tus materiales de estudio.
+                Te quedan {quota.remaining} de {quota.limit} ayudas con IA para hoy. Se comparten entre el tutor y otros materiales; no limitan los cuestionarios.
               </p>
             </div>
             <span className="rounded-full bg-page px-3 py-1 text-sm font-semibold">{quota.remaining} restantes</span>
@@ -447,7 +505,7 @@ export function StudentDashboard() {
         <section className={`${cardClass} scroll-mt-32 border-l-4 border-l-secondary`}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-bold uppercase tracking-wide text-primary">Mi día</p>
+              <p className="text-sm font-bold uppercase tracking-wide text-primary">¡Vamos paso a paso!</p>
               <h2 className="mt-1 text-2xl font-extrabold capitalize">{todayName}</h2>
               <p className="mt-1 text-sm text-tertiary/75">
                 {openTasks.length === 0 ? '¡Todo al día! ¿Practicamos algo nuevo?' : `Tienes ${openTasks.length} ${openTasks.length === 1 ? 'actividad' : 'actividades'} por completar. ¡Tú puedes!`}
@@ -459,6 +517,54 @@ export function StudentDashboard() {
           </div>
           {speechMessage ? <p className="mt-3 text-sm text-tertiary/75" role="status">{speechMessage}</p> : null}
         </section>
+        </DashboardModule>
+
+        <DashboardModule id="avisos">
+          <section id="avisos" className={`${cardClass} scroll-mt-32`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">Avisos dentro de tu panel</p>
+                <h2 className="mt-1 text-xl font-bold">Fechas importantes</h2>
+                <p className="mt-1 text-sm text-tertiary/75">Tareas vencidas, de hoy y de los próximos 7 días.</p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${notificationTasks.length ? 'bg-accent/10 text-accent' : 'bg-success/10 text-success'}`}>
+                {notificationTasks.length} {notificationTasks.length === 1 ? 'aviso' : 'avisos'}
+              </span>
+            </div>
+            {notificationTasks.length > 0 ? (
+              <ul className="mt-4 space-y-2">
+                {notificationTasks.map((task) => {
+                  const days = daysUntilDue(task.dueAt!)
+                  const isOverdue = days !== null && days < 0
+                  const dueLabel = days === 0
+                    ? 'Vence hoy'
+                    : isOverdue
+                      ? `Venció hace ${Math.abs(days!)} ${Math.abs(days!) === 1 ? 'día' : 'días'}`
+                      : `Vence en ${days} ${days === 1 ? 'día' : 'días'}`
+                  return (
+                    <li key={task.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-page/60 p-4">
+                      <div className="min-w-0">
+                        <p className={`text-xs font-bold uppercase tracking-wide ${isOverdue || days === 0 ? 'text-accent' : 'text-primary'}`}>
+                          {dueLabel}{task.subject ? ` · ${task.subject.name}` : ''}
+                        </p>
+                        <p className="mt-1 font-semibold">{task.title}</p>
+                        <p className="mt-1 text-xs text-tertiary/70">
+                          {new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(task.dueAt!))}
+                        </p>
+                      </div>
+                      <DashboardModuleAction id="actividades" className={`${secondaryButton} shrink-0`}>
+                        Ver actividad
+                      </DashboardModuleAction>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-xl bg-page p-4 text-sm text-tertiary/75">
+                No tienes vencimientos próximos. Aquí aparecerán las tareas con fecha límite.
+              </p>
+            )}
+          </section>
         </DashboardModule>
 
         <DashboardModule id="cursos">
@@ -513,7 +619,7 @@ export function StudentDashboard() {
               <span className="rounded-full bg-page px-3 py-1 text-sm">{openTasks.length} pendientes</span>
             </div>
             <ul className="mt-4 space-y-3">
-              {data.tasks.map((task) => {
+              {orderedTasks.map((task) => {
                 const subjectId = task.subject?.id
                 return (
                 <li key={task.id} className={`rounded-lg border border-line p-4 ${task.status === 'completed' ? 'bg-page/70' : ''}`}>
@@ -542,14 +648,14 @@ export function StudentDashboard() {
                       </select>
                     </label>
                   </div>
-                  {task.isQuiz && task.status !== 'completed' ? (
+                  {task.isQuiz ? (
                     <button
                       type="button"
                       className={`${primaryButton} mt-4`}
                       disabled={busy}
                       onClick={() => void handleStartAssignedQuiz(task)}
                     >
-                      Responder cuestionario
+                      {task.status === 'completed' ? 'Intentar cuestionario otra vez' : 'Responder cuestionario'}
                     </button>
                   ) : null}
                   {task.attachments.length > 0 ? (
@@ -595,7 +701,7 @@ export function StudentDashboard() {
                       <button
                         type="button"
                         className={secondaryButton}
-                        disabled={busy || (quota?.remaining ?? 1) < 1}
+                        disabled={busy || ((quota?.remaining ?? 1) < 1 && (artifactTypes[task.id] ?? 'summary') !== 'practice')}
                         onClick={() => void handleGenerateArtifact(task)}
                       >
                         Crear con IA
@@ -613,16 +719,32 @@ export function StudentDashboard() {
           <div className="space-y-6">
             <DashboardModule id="horario">
             <section id="horario" className={`${cardClass} scroll-mt-32`}>
-              <h2 className="text-lg font-semibold">Horario de hoy</h2>
-              <ul className="mt-3 divide-y divide-line">
-                {todaysSchedule.map((block) => (
-                  <li key={block.id} className="flex items-center justify-between gap-3 py-3 text-sm">
-                    <span className="font-semibold">{block.startTime}–{block.endTime}</span>
-                    <span className="text-right">{block.subject?.name ?? 'Tiempo de estudio'}</span>
-                  </li>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-primary">Organiza tu semana</p>
+                  <h2 className="mt-1 text-lg font-bold">Horario de clases y estudio</h2>
+                </div>
+                <span className="rounded-full bg-page px-3 py-1 text-xs font-semibold capitalize">{todayName}</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {weeklySchedule.map((day) => (
+                  <section key={day.id} className={`rounded-xl border p-3 ${day.id === localDay() ? 'border-primary/40 bg-primary/5' : 'border-line bg-page/40'}`}>
+                    <h3 className="text-sm font-bold">{day.label}{day.id === localDay() ? ' · Hoy' : ''}</h3>
+                    {day.blocks.length > 0 ? (
+                      <ul className="mt-2 space-y-2">
+                        {day.blocks.map((block) => (
+                          <li key={block.id} className="flex items-center justify-between gap-3 rounded-lg bg-card px-3 py-2 text-sm">
+                            <span className="shrink-0 font-semibold tabular-nums">{block.startTime}–{block.endTime}</span>
+                            <span className="text-right">{block.subject?.name ?? 'Tiempo de estudio'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-xs text-tertiary/65">Sin bloques programados</p>
+                    )}
+                  </section>
                 ))}
-                {todaysSchedule.length === 0 ? <li className="py-3 text-sm text-tertiary/75">No tienes bloques programados para hoy.</li> : null}
-              </ul>
+              </div>
             </section>
             </DashboardModule>
           </div>
@@ -640,14 +762,21 @@ export function StudentDashboard() {
               </p>
             ) : null}
             {!quiz && !practiceResult && data.subjects.length > 0 ? (
-              <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={handleStartPractice}>
-                <label className="min-w-52 flex-1"><span className={labelClass}>Materia</span>
-                  <select className={inputClass} value={quizSubjectId} onChange={(event) => setQuizSubjectId(event.target.value)} required>
-                    {data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
-                  </select>
-                </label>
-                <button className={primaryButton} disabled={busy || data.subjects.length === 0}>Empezar práctica</button>
-              </form>
+              <>
+                <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={handleStartPractice}>
+                  <label className="min-w-52 flex-1"><span className={labelClass}>Materia</span>
+                    <select className={inputClass} value={quizSubjectId} onChange={(event) => setQuizSubjectId(event.target.value)} required>
+                      {data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+                    </select>
+                  </label>
+                  <button
+                    className={primaryButton}
+                    disabled={busy || data.subjects.length === 0}
+                  >
+                    Empezar práctica
+                  </button>
+                </form>
+              </>
             ) : quiz && currentQuestion ? (
               <div className="mt-4 rounded-lg bg-page p-4">
                 <div className="flex items-center justify-between text-sm">

@@ -7,7 +7,7 @@ import {
   readPrivateFile,
   saveGeneratedFile,
 } from '../modules/families/uploads'
-import { reserveAiUsage, releaseAiUsage, withAiUsage } from './aiQuotaService'
+import { reserveAiUsage, releaseAiUsage } from './aiQuotaService'
 import { generateGeminiSpeech, generateGeminiText, type GeminiPart } from './geminiService'
 import { renderNarratedVideo, wavFromPcm } from './videoRenderer'
 
@@ -113,22 +113,20 @@ export async function generateAcademicPractice(input: {
   title?: string
   description?: string | null
 }) {
-  return withAiUsage(input.userId, 'practice', async () => {
-    const generated = await generateGeminiText({
-      systemInstruction: `${learnerSafety} ${gradeLevelGuidance(input.grade)} ${purposePrompt('practice')}`,
-      parts: [{
-        text: [
-          `Materia: ${input.subject}`,
-          `Grado: ${input.grade}`,
-          input.title ? `Tema o actividad: ${input.title}` : '',
-          input.description ? `Contexto adicional:\n${input.description}` : '',
-        ].filter(Boolean).join('\n\n'),
-      }],
-      responseMimeType: 'application/json',
-      maxOutputTokens: 2500,
-    })
-    return parseJson(questionListSchema, generated).questions
+  const generated = await generateGeminiText({
+    systemInstruction: `${learnerSafety} ${gradeLevelGuidance(input.grade)} ${purposePrompt('practice')}`,
+    parts: [{
+      text: [
+        `Materia: ${input.subject}`,
+        `Grado: ${input.grade}`,
+        input.title ? `Tema o actividad: ${input.title}` : '',
+        input.description ? `Contexto adicional:\n${input.description}` : '',
+      ].filter(Boolean).join('\n\n'),
+    }],
+    responseMimeType: 'application/json',
+    maxOutputTokens: 2500,
   })
+  return parseJson(questionListSchema, generated).questions
 }
 
 export async function generateAcademicReadingPractice(input: {
@@ -138,28 +136,26 @@ export async function generateAcademicReadingPractice(input: {
   title: string
   description?: string | null
 }) {
-  return withAiUsage(input.userId, 'practice', async () => {
-    const generated = await generateGeminiText({
-      systemInstruction: [
-        learnerSafety,
-        gradeLevelGuidance(input.grade),
-        'Crea primero una mini lectura educativa, original y completa en español sobre el tema y la materia indicados. Debe ser adecuada para la edad y el grado: para los primeros grados usa aproximadamente 80 a 130 palabras, frases cortas, vocabulario cotidiano y una idea concreta; aumenta gradualmente extensión y complejidad solo para grados mayores.',
-        'Después crea exactamente 5 preguntas de comprensión basadas exclusivamente en información que aparezca claramente en esa lectura. Las preguntas deben comprobar que el alumno leyó y comprendió el texto; no deben requerir conocimientos externos ni incluir contenidos más avanzados que el grado.',
-        'No reemplaces la lectura por instrucciones, consejos de estudio o una lista de preguntas. No escribas las respuestas de forma obvia en las preguntas. Devuelve únicamente JSON válido con este formato: {"reading":"Texto completo de la lectura","questions":[{"prompt":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]}. Cada respuesta correcta debe poder localizarse en la lectura y la explicación debe aclararla.',
-      ].join(' '),
-      parts: [{
-        text: [
-          `Materia: ${input.subject}`,
-          `Grado: ${input.grade}`,
-          `Tema: ${input.title}`,
-          input.description ? `Contexto indicado por el encargado:\n${input.description}` : '',
-        ].filter(Boolean).join('\n\n'),
-      }],
-      responseMimeType: 'application/json',
-      maxOutputTokens: 3000,
-    })
-    return parseJson(readingPracticeSchema, generated)
+  const generated = await generateGeminiText({
+    systemInstruction: [
+      learnerSafety,
+      gradeLevelGuidance(input.grade),
+      'Crea primero una mini lectura educativa, original y completa en español sobre el tema y la materia indicados. Debe ser adecuada para la edad y el grado: para los primeros grados usa aproximadamente 80 a 130 palabras, frases cortas, vocabulario cotidiano y una idea concreta; aumenta gradualmente extensión y complejidad solo para grados mayores.',
+      'Después crea exactamente 5 preguntas de comprensión basadas exclusivamente en información que aparezca claramente en esa lectura. Las preguntas deben comprobar que el alumno leyó y comprendió el texto; no deben requerir conocimientos externos ni incluir contenidos más avanzados que el grado.',
+      'No reemplaces la lectura por instrucciones, consejos de estudio o una lista de preguntas. No escribas las respuestas de forma obvia en las preguntas. Devuelve únicamente JSON válido con este formato: {"reading":"Texto completo de la lectura","questions":[{"prompt":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."}]}. Cada respuesta correcta debe poder localizarse en la lectura y la explicación debe aclararla.',
+    ].join(' '),
+    parts: [{
+      text: [
+        `Materia: ${input.subject}`,
+        `Grado: ${input.grade}`,
+        `Tema: ${input.title}`,
+        input.description ? `Contexto indicado por el encargado:\n${input.description}` : '',
+      ].filter(Boolean).join('\n\n'),
+    }],
+    responseMimeType: 'application/json',
+    maxOutputTokens: 3000,
   })
+  return parseJson(readingPracticeSchema, generated)
 }
 
 export async function createLearningArtifact(input: {
@@ -205,7 +201,9 @@ export async function createLearningArtifact(input: {
     parts.push({ inlineData: { mimeType: attachment.mimeType, data: file.toString('base64') } })
   }
 
-  const reservation = await reserveAiUsage(input.userId, generationType[input.type])
+  const reservation = input.type === 'practice'
+    ? null
+    : await reserveAiUsage(input.userId, generationType[input.type])
   let modelCalledSuccessfully = false
   let title = `${task.subject.name}: ${task.title}`
   let content = ''
@@ -258,7 +256,7 @@ export async function createLearningArtifact(input: {
       content = generated
     }
   } catch (error) {
-    if (!modelCalledSuccessfully) {
+    if (!modelCalledSuccessfully && reservation) {
       await releaseAiUsage(reservation.id)
     }
     throw error

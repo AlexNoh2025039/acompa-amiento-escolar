@@ -144,7 +144,6 @@ describe('student dashboard API', () => {
       .post(`/api/families/me/children/${child.body.child.id}/subjects`)
       .send({ name: 'Matemática' })
       .expect(201)
-
     const student = request.agent(app)
     await student
       .post('/api/auth/login')
@@ -237,7 +236,7 @@ describe('student dashboard API', () => {
     expect(Number(history.body.evaluations[0].maxScore)).toBe(100)
   })
 
-  it('lets a student complete a parent-assigned quiz once and awards review points once', async () => {
+  it('lets a student retry a parent-assigned quiz and awards review points once', async () => {
     const parentAgent = request.agent(app)
     await parentAgent
       .post('/api/auth/register')
@@ -303,10 +302,24 @@ describe('student dashboard API', () => {
       .send({ token: quiz.body.token, answers: [0, 0, 1, 0, 0] })
       .expect(200)
     expect(submission.body.pointsAwarded).toBe(10)
+
+    const retry = await student
+      .post('/api/student/practice/start')
+      .send({ taskId })
+      .expect(201)
+    expect(retry.body.token).not.toBe(quiz.body.token)
+    const retrySubmission = await student
+      .post('/api/student/practice/submit')
+      .send({ token: retry.body.token, answers: [0, 1, 2, 3, 1] })
+      .expect(200)
+    expect(retrySubmission.body.result.percentage).toBe(100)
+    expect(retrySubmission.body.pointsAwarded).toBe(10)
+
     const resultHistory = await student.get('/api/student/results').expect(200)
-    expect(Number(resultHistory.body.evaluations[0].score)).toBe(20)
+    expect(resultHistory.body.evaluations).toHaveLength(2)
+    expect(Number(resultHistory.body.evaluations[0].score)).toBe(100)
     expect(Number(resultHistory.body.evaluations[0].maxScore)).toBe(100)
-    expect((await student.get('/api/student/me').expect(200)).body.student.points).toBe(10)
+    expect((await student.get('/api/student/me').expect(200)).body.student.points).toBe(20)
     expect((await student.get('/api/student/me').expect(200)).body.tasks[0].status).toBe('completed')
 
     await parentAgent
@@ -317,8 +330,8 @@ describe('student dashboard API', () => {
       .post(`/api/families/me/children/${childId}/tasks/${taskId}/review`)
       .expect(409)
     const overview = await parentAgent.get('/api/families/me/overview').expect(200)
-    expect(overview.body.children[0].points).toBe(15)
-    expect(overview.body.children[0].averageScore).toBe(20)
+    expect(overview.body.children[0].points).toBe(25)
+    expect(overview.body.children[0].averageScore).toBe(60)
   })
 
   it('creates an interactive quiz for any task type', async () => {
@@ -384,6 +397,13 @@ describe('student dashboard API', () => {
       .post(`/api/families/me/children/${childId}/account`)
       .send({ email: 'alex@example.com', password: 'alumno1234', confirmPassword: 'alumno1234' })
       .expect(201)
+    const studentUser = await prisma.user.findUniqueOrThrow({ where: { email: 'alex@example.com' } })
+    await prisma.aiUsage.createMany({
+      data: [
+        ...Array.from({ length: 5 }, () => ({ userId: studentUser.id, purpose: 'tutor' as const })),
+        ...Array.from({ length: 3 }, () => ({ userId: studentUser.id, purpose: 'practice' as const })),
+      ],
+    })
     const subject = await parentAgent
       .post(`/api/families/me/children/${childId}/subjects`)
       .send({ name: 'Literatura' })
@@ -416,6 +436,10 @@ describe('student dashboard API', () => {
         .post('/api/auth/login')
         .send({ email: 'alex@example.com', password: 'alumno1234' })
         .expect(200)
+      expect((await student.get('/api/student/ai/usage').expect(200)).body.usage).toMatchObject({
+        used: 5,
+        remaining: 0,
+      })
       const assignedQuiz = await student
         .post('/api/student/practice/start')
         .send({ taskId: assigned.body.task.id })
@@ -428,6 +452,11 @@ describe('student dashboard API', () => {
         .expect(201)
       expect(freePractice.body.questions[0].prompt).toContain('¿quién es el sujeto?')
       expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(await prisma.aiUsage.count({ where: { userId: studentUser.id } })).toBe(8)
+      expect((await student.get('/api/student/ai/usage').expect(200)).body.usage).toMatchObject({
+        used: 5,
+        remaining: 0,
+      })
     } finally {
       generation.restore()
     }
@@ -448,6 +477,13 @@ describe('student dashboard API', () => {
       .post(`/api/families/me/children/${childId}/account`)
       .send({ email: 'alex@example.com', password: 'alumno1234', confirmPassword: 'alumno1234' })
       .expect(201)
+    const studentUser = await prisma.user.findUniqueOrThrow({ where: { email: 'alex@example.com' } })
+    await prisma.aiUsage.createMany({
+      data: [
+        ...Array.from({ length: 5 }, () => ({ userId: studentUser.id, purpose: 'tutor' as const })),
+        ...Array.from({ length: 3 }, () => ({ userId: studentUser.id, purpose: 'practice' as const })),
+      ],
+    })
     const subject = await parentAgent
       .post(`/api/families/me/children/${childId}/subjects`)
       .send({ name: 'Ciencias Naturales' })
@@ -471,6 +507,7 @@ describe('student dashboard API', () => {
           subjectId: subject.body.subject.id,
         })
         .expect(201)
+      expect(await prisma.aiUsage.count({ where: { userId: studentUser.id } })).toBe(8)
       expect(task.body.task.isQuiz).toBe(true)
       expect(task.body.task.readingContent).toBe(reading)
 

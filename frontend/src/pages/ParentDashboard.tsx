@@ -109,9 +109,9 @@ const controlClass =
   'w-full rounded-md border border-line bg-card px-3 py-2 text-tertiary outline-none focus:border-primary focus:ring-2 focus:ring-primary/30'
 const labelClass = 'mb-1 block text-sm font-medium text-tertiary'
 const buttonClass =
-  'rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60'
+  'family-primary-button rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60'
 const secondaryButtonClass =
-  'rounded-md border border-line px-3 py-2 text-sm font-semibold text-tertiary hover:bg-page disabled:opacity-60'
+  'family-secondary-button rounded-md border border-line px-3 py-2 text-sm font-semibold text-tertiary hover:bg-page disabled:opacity-60'
 
 function ScheduleEditor({
   schedule,
@@ -303,6 +303,24 @@ export function ParentDashboard() {
   const selectedChild = useMemo(
     () => children.find((child) => child.id === selectedId) ?? null,
     [children, selectedId],
+  )
+  const orderedSchedules = useMemo(() => {
+    const dayOrder = Object.keys(days)
+    return [...schedules].sort((first, second) =>
+      dayOrder.indexOf(first.dayOfWeek) - dayOrder.indexOf(second.dayOfWeek) ||
+      first.startTime.localeCompare(second.startTime),
+    )
+  }, [schedules])
+  const orderedTasks = useMemo(
+    () =>
+      [...tasks].sort((first, second) => {
+        if (first.status === 'completed' && second.status !== 'completed') return 1
+        if (first.status !== 'completed' && second.status === 'completed') return -1
+        if (!first.dueAt) return second.dueAt ? 1 : 0
+        if (!second.dueAt) return -1
+        return Date.parse(first.dueAt) - Date.parse(second.dueAt)
+      }),
+    [tasks],
   )
 
   async function refreshOverview() {
@@ -774,17 +792,17 @@ export function ParentDashboard() {
     return <main className="grid min-h-screen place-items-center bg-page text-tertiary">Cargando tu familia…</main>
   }
 
-  const cardClass = 'rounded-xl border border-line bg-card p-5 shadow-sm'
+  const cardClass = 'family-card rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6'
   const navigation = selectedChild ? parentNavigation : parentOverviewNavigation
 
   return (
     <DashboardLayout brand="Espacio familiar" description="Organiza perfiles, cursos y actividades escolares." items={navigation}>
         <DashboardModule id="inicio">
-        <header id="inicio" className="flex scroll-mt-32 flex-wrap items-center justify-between gap-4 rounded-xl border border-line bg-card p-5 shadow-sm">
+        <header id="inicio" className="family-hero flex scroll-mt-32 flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 shadow-sm sm:p-8">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary">Acompañamiento escolar</p>
-            <h1 className="mt-1 text-2xl font-semibold">Hola, {user.fullName}</h1>
-            <p className="text-sm text-tertiary/75">{familyName || 'Tu familia'} · Gestiona perfiles, estudio y seguimiento.</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-primary">Acompañamiento escolar</p>
+            <h1 className="mt-2 text-3xl font-bold">Hola, {user.fullName}</h1>
+            <p className="mt-1 text-sm text-tertiary/75">{familyName || 'Tu familia'} · Organiza el aprendizaje y da seguimiento desde aquí.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" className={secondaryButtonClass} onClick={handleLogout} disabled={loggingOut || deletingAccount}>
@@ -1103,7 +1121,7 @@ export function ParentDashboard() {
                   <button className={`${buttonClass} sm:col-span-2`} disabled={busy}>Agregar horario</button>
                 </form>
                 <ul className="mt-4 divide-y divide-line">
-                  {schedules.map((schedule) => (
+                  {orderedSchedules.map((schedule) => (
                     <li key={schedule.id} className="py-3">
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span>{days[schedule.dayOfWeek]} · {schedule.startTime}–{schedule.endTime}{schedule.subject ? ` · ${schedule.subject.name}` : ''}</span>
@@ -1198,7 +1216,7 @@ export function ParentDashboard() {
             <section id="actividades" className={`${cardClass} scroll-mt-32`}>
               <h2 className="text-lg font-semibold">Tareas y exámenes</h2>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {tasks.map((task) => (
+                {orderedTasks.map((task) => (
                   <article key={task.id} className="rounded-lg border border-line p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
