@@ -335,6 +335,12 @@ export function StudentTutorPage() {
                     rows={3}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                        event.preventDefault()
+                        event.currentTarget.form?.requestSubmit()
+                      }
+                    }}
                     maxLength={4000}
                     placeholder="Ej. ¿Cómo puedo sumar fracciones?"
                     disabled={sending}
@@ -370,7 +376,7 @@ export function StudentTutorPage() {
                     </div>
                   ) : null}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-tertiary/70">{draft.length}/4000 caracteres</span>
+                    <span className="text-xs text-tertiary/70">Enter envía · Shift+Enter agrega línea · {draft.length}/4000 caracteres</span>
                     <button className={buttonClass} disabled={sending || (!draft.trim() && !attachment)}>
                       {sending ? 'Pensando…' : '💡 Pedir una pista'}
                     </button>

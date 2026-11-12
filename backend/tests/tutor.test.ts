@@ -218,6 +218,25 @@ describe('student tutor API', () => {
       .expect(201)
     expect(messageResult.body.assistantMessage.content).toBe('¿Qué has intentado hasta ahora?')
 
+    fetchMock.mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        candidates: [{
+          finishReason: 'MAX_TOKENS',
+          content: { parts: [{ text: 'La explicación se quedó a la mitad' }] },
+        }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+    const truncatedResponse = await student
+      .post(`/api/student/tutor/conversations/${created.body.conversation.id}/messages`)
+      .send({ content: 'Explícame el tema paso a paso con detalle' })
+      .expect(502)
+    expect(truncatedResponse.body.error).toMatchObject({
+      code: 'AI_RESPONSE_TRUNCATED',
+      message: 'La respuesta quedó incompleta. Inténtalo de nuevo pidiendo la explicación por partes.',
+    })
+    expect(await prisma.tutorMessage.count()).toBe(2)
+
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 401 }))
     const providerError = await student
       .post(`/api/student/tutor/conversations/${created.body.conversation.id}/messages`)
@@ -232,6 +251,7 @@ describe('student tutor API', () => {
     const [, options] = fetchMock.mock.calls[0]
     expect(new Headers(options?.headers).get('x-goog-api-key')).toBe('test-server-key')
     const geminiRequest = JSON.parse(String(options?.body))
+    expect(geminiRequest.generationConfig.maxOutputTokens).toBe(2000)
     expect(geminiRequest.systemInstruction.parts[0].text).toContain('Materia: Matemática')
     expect(geminiRequest.systemInstruction.parts[0].text).toContain('Grado: 5° primaria')
     expect(geminiRequest.contents.at(-1)).toMatchObject({

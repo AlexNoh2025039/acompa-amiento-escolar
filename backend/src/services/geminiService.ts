@@ -9,6 +9,7 @@ export type GeminiPart =
 const contentResponseSchema = z.object({
   candidates: z.array(
     z.object({
+      finishReason: z.string().optional(),
       content: z.object({
         parts: z.array(z.object({ text: z.string().optional() })),
       }).optional(),
@@ -87,6 +88,9 @@ export async function generateGeminiText(input: {
   const parsed = contentResponseSchema.safeParse(payload)
   if (!parsed.success) {
     throw new AppError(502, 'AI_INVALID_RESPONSE', 'El servicio de IA devolvió una respuesta que no pudimos leer.')
+  }
+  if (parsed.data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+    throw new AppError(502, 'AI_RESPONSE_TRUNCATED', 'La respuesta quedó incompleta. Inténtalo de nuevo pidiendo la explicación por partes.')
   }
   const text = parsed.data.candidates?.[0]?.content?.parts
     .map((part) => part.text ?? '')
