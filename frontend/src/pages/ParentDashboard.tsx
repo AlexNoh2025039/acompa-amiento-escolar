@@ -289,6 +289,8 @@ export function ParentDashboard() {
   const [editBirthDate, setEditBirthDate] = useState('')
   const [editGrade, setEditGrade] = useState('')
   const [subjectName, setSubjectName] = useState('')
+  const [subjectTargetIds, setSubjectTargetIds] = useState<string[]>([])
+  const [showSubjectTargets, setShowSubjectTargets] = useState(false)
   const [scheduleDay, setScheduleDay] = useState('monday')
   const [scheduleStart, setScheduleStart] = useState('09:00')
   const [scheduleEnd, setScheduleEnd] = useState('10:00')
@@ -374,6 +376,10 @@ export function ParentDashboard() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    setSubjectTargetIds(selectedId ? [selectedId] : [])
+  }, [selectedId])
 
   useEffect(() => {
     if (!selectedChild) {
@@ -531,22 +537,44 @@ export function ParentDashboard() {
 
   async function handleAssignSubject(event: FormEvent) {
     event.preventDefault()
-    if (!selectedChild) return
+    const targetChildIds = [...subjectTargetIds]
+    if (targetChildIds.length === 0) {
+      setActionError('Selecciona al menos un alumno para asignarle la materia.')
+      setActionMessage('')
+      return
+    }
     await perform(async () => {
-      const result = await apiRequest<{ subject: Subject }>(
-        `/api/families/me/children/${selectedChild.id}/subjects`,
-        { method: 'POST', body: JSON.stringify({ name: subjectName }) },
-      )
-      setChildren((current) =>
-        current.map((child) =>
-          child.id === selectedChild.id &&
-          !child.subjects.some((subject) => subject.id === result.subject.id)
-            ? { ...child, subjects: [...child.subjects, result.subject] }
-            : child,
-        ),
-      )
+      let assignedCount = 0
+      for (const childId of targetChildIds) {
+        try {
+          const result = await apiRequest<{ subject: Subject }>(
+            `/api/families/me/children/${childId}/subjects`,
+            { method: 'POST', body: JSON.stringify({ name: subjectName }) },
+          )
+          assignedCount += 1
+          setChildren((current) =>
+            current.map((child) =>
+              child.id === childId && !child.subjects.some((subject) => subject.id === result.subject.id)
+                ? { ...child, subjects: [...child.subjects, result.subject] }
+                : child,
+            ),
+          )
+        } catch (error) {
+          if (assignedCount > 0) {
+            throw new ApiError(
+              500,
+              'PARTIAL_SUBJECT_ASSIGNMENT',
+              `La materia se asignó a ${assignedCount} alumno${assignedCount === 1 ? '' : 's'}, pero no se pudo asignar a todos: ${errorMessage(error)}`,
+              {},
+            )
+          }
+          throw error
+        }
+      }
       setSubjectName('')
-    }, 'Materia asignada al hijo.')
+    }, targetChildIds.length === 1
+      ? 'Materia asignada al alumno.'
+      : `Materia asignada a ${targetChildIds.length} alumnos.`)
   }
 
   async function handleRemoveSubject(subject: Subject) {
@@ -796,7 +824,14 @@ export function ParentDashboard() {
   const navigation = selectedChild ? parentNavigation : parentOverviewNavigation
 
   return (
-    <DashboardLayout brand="Espacio familiar" description="Organiza perfiles, cursos y actividades escolares." items={navigation}>
+    <DashboardLayout
+      brand="Espacio familiar"
+      description="Organiza perfiles, cursos y actividades escolares."
+      items={navigation}
+      onLogout={() => void handleLogout()}
+      logoutLabel={loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+      logoutDisabled={loggingOut || deletingAccount}
+    >
         <DashboardModule id="inicio">
         <header id="inicio" className="family-hero flex scroll-mt-32 flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 shadow-sm sm:p-8">
           <div>
@@ -1025,7 +1060,37 @@ export function ParentDashboard() {
               </div>
               <form className="mt-4 flex flex-wrap gap-2" onSubmit={handleAssignSubject}>
                 <input className={`${controlClass} max-w-sm`} value={subjectName} onChange={(event) => setSubjectName(event.target.value)} required maxLength={80} placeholder="Ej. Matemática" aria-label="Nueva materia" />
-                <button className={buttonClass} disabled={busy}>Asignar materia</button>
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  aria-expanded={showSubjectTargets}
+                  onClick={() => setShowSubjectTargets((current) => !current)}
+                  disabled={busy}
+                >
+                  {showSubjectTargets ? 'Ocultar alumnos' : `Seleccionar alumnos (${subjectTargetIds.length})`}
+                </button>
+                <button className={buttonClass} disabled={busy || subjectTargetIds.length === 0}>Asignar materia</button>
+                {showSubjectTargets ? (
+                  <fieldset className="w-full rounded-lg border border-line p-3" disabled={busy}>
+                    <legend className="px-1 text-sm font-medium">¿A qué alumnos se asigna esta materia?</legend>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2">
+                      {children.map((child) => (
+                        <label key={child.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={subjectTargetIds.includes(child.id)}
+                            onChange={(event) => setSubjectTargetIds((current) =>
+                              event.target.checked
+                                ? [...current, child.id]
+                                : current.filter((id) => id !== child.id),
+                            )}
+                          />
+                          {child.fullName}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ) : null}
               </form>
             </section>
             </DashboardModule>

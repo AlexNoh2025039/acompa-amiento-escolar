@@ -156,11 +156,17 @@ export function DashboardLayout({
   description,
   items,
   children,
+  onLogout,
+  logoutLabel = 'Cerrar sesión',
+  logoutDisabled = false,
 }: {
   brand: string
   description: string
   items: DashboardNavItem[]
   children: ReactNode
+  onLogout?: () => void
+  logoutLabel?: string
+  logoutDisabled?: boolean
 }) {
   const [activeId, setActiveId] = useState(items[0]?.id ?? '')
   const playful = brand === 'Espacio del alumno' || brand === 'Tutor de estudio'
@@ -192,6 +198,16 @@ export function DashboardLayout({
           <p className="text-sm font-semibold">{playful ? 'Vas muy bien 🌟' : family ? 'Todo en un mismo lugar' : brand}</p>
           <p className="mt-1 text-xs leading-relaxed text-tertiary/65">{description}</p>
         </div>
+        {onLogout ? (
+          <button
+            type="button"
+            className="mt-3 w-full rounded-xl border border-accent/30 px-3 py-2.5 text-left text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onLogout}
+            disabled={logoutDisabled}
+          >
+            {logoutLabel}
+          </button>
+        ) : null}
       </aside>
 
       <div className="min-w-0 flex-1">

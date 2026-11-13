@@ -720,6 +720,24 @@ describe('student dashboard API', () => {
       const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
       expect(JSON.stringify(requestBody.contents)).toContain('Fracciones equivalentes')
 
+      const taskPractice = await student
+        .post('/api/student/practice/start')
+        .send({ taskId: task.body.task.id })
+        .expect(201)
+      expect(taskPractice.body.questions[0].prompt).toContain('fracciones equivalentes')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      const taskPracticeRequest = JSON.parse(String(fetchMock.mock.calls[1][1]?.body))
+      expect(JSON.stringify(taskPracticeRequest.contents)).toContain('Fracciones equivalentes')
+      const taskPracticeResult = await student
+        .post('/api/student/practice/submit')
+        .send({ token: taskPractice.body.token, answers: [1, 1, 1, 1, 1] })
+        .expect(200)
+      expect(taskPracticeResult.body.result.evaluation.title).toBe('Práctica: Fracciones equivalentes')
+      expect((await prisma.task.findUniqueOrThrow({
+        where: { id: task.body.task.id },
+        select: { status: true },
+      })).status).toBe('pending')
+
       const practice = await student
         .post('/api/student/practice/start')
         .send({ artifactId: generated.body.artifact.id })

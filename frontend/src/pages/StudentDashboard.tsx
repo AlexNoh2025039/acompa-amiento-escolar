@@ -356,14 +356,15 @@ export function StudentDashboard() {
     })
   }
 
-  async function handleStartAssignedQuiz(task: Task) {
+  async function handleStartTaskPractice(task: Task) {
     await perform(async () => {
       const result = await apiRequest<PracticeSession>('/api/student/practice/start', {
         method: 'POST',
         body: JSON.stringify({ taskId: task.id }),
       })
       setQuiz(result)
-      setQuizTaskId(task.id)
+      setQuizTaskId(task.isQuiz ? task.id : null)
+      if (task.subject) setQuizSubjectId(task.subject.id)
       setAnswers(Array(result.questions.length).fill(-1))
       setQuestionIndex(0)
       setPracticeResult(null)
@@ -451,7 +452,14 @@ export function StudentDashboard() {
   const currentQuestion = quiz?.questions[questionIndex]
   const quizCompletedCount = answers.filter((answer) => answer >= 0).length
   return (
-    <DashboardLayout brand="Espacio del alumno" description="Encuentra tus cursos, actividades y herramientas de estudio." items={studentNavigation}>
+    <DashboardLayout
+      brand="Espacio del alumno"
+      description="Encuentra tus cursos, actividades y herramientas de estudio."
+      items={studentNavigation}
+      onLogout={() => void handleLogout()}
+      logoutLabel={loggingOut ? 'Saliendo…' : 'Cerrar sesión'}
+      logoutDisabled={loggingOut}
+    >
         <DashboardModule id="inicio">
         <header id="inicio" className="student-hero flex scroll-mt-32 flex-wrap items-center justify-between gap-4 rounded-2xl border p-6 shadow-sm sm:p-8">
           <div>
@@ -627,7 +635,7 @@ export function StudentDashboard() {
                       type="button"
                       className={`${primaryButton} mt-4`}
                       disabled={busy}
-                      onClick={() => void handleStartAssignedQuiz(task)}
+                      onClick={() => void handleStartTaskPractice(task)}
                     >
                       {task.status === 'completed' ? 'Intentar cuestionario otra vez' : 'Responder cuestionario'}
                     </button>
@@ -646,13 +654,13 @@ export function StudentDashboard() {
                       ))}
                     </ul>
                   ) : null}
-                  {subjectId ? (
+                  {subjectId && !task.isQuiz ? (
                     <DashboardModuleAction
                       id="practica"
                       className={`${secondaryButton} mt-4`}
-                      onClick={() => setQuizSubjectId(subjectId)}
+                      onClick={() => void handleStartTaskPractice(task)}
                     >
-                      Practicar {task.subject?.name}
+                      Practicar esta actividad
                     </DashboardModuleAction>
                   ) : null}
                   {task.subject ? (

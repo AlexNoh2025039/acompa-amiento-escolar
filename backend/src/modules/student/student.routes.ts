@@ -242,7 +242,7 @@ studentRouter.post(
     let questions: z.infer<typeof practiceQuestionSchema>[]
     let taskId: string | undefined
     let reading: string | null = null
-    let existingAttempt: { id: string; completedAt: Date | null } | null = null
+    let existingAttempt: { id: string; completedAt: Date | null; questions: unknown } | null = null
     if ('artifactId' in parsed.data) {
       const artifact = await prisma.learningArtifact.findFirst({
         where: {
@@ -278,28 +278,47 @@ studentRouter.post(
         where: { id: parsed.data.taskId, childId: child.id },
         select: {
           id: true,
+          title: true,
+          description: true,
           subject: { select: { id: true, name: true } },
           quizQuestions: true,
           practiceAttempts: {
             where: { completedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { id: true, completedAt: true },
+            select: { id: true, completedAt: true, questions: true },
           },
         },
       })
-      if (!task?.subject || !task.quizQuestions) {
-        throw new AppError(404, 'QUIZ_NOT_FOUND', 'No encontramos este cuestionario.')
+      if (!task?.subject) {
+        throw new AppError(404, 'TASK_NOT_FOUND', 'No encontramos esta actividad con una materia asignada.')
       }
       if (!child.subjects.some(({ subjectId }) => subjectId === task.subject!.id)) {
-        throw new AppError(403, 'SUBJECT_NOT_ASSIGNED', 'Este cuestionario ya no pertenece a una materia asignada.')
+        throw new AppError(403, 'SUBJECT_NOT_ASSIGNED', 'Esta actividad ya no pertenece a una materia asignada.')
       }
       subject = task.subject
-      const taskQuiz = parseTaskQuiz(task.quizQuestions)
-      reading = taskQuiz.reading
-      questions = taskQuiz.questions
       taskId = task.id
       existingAttempt = task.practiceAttempts[0] ?? null
+      if (task.quizQuestions) {
+        const taskQuiz = parseTaskQuiz(task.quizQuestions)
+        reading = taskQuiz.reading
+        questions = existingAttempt
+          ? z.array(practiceQuestionSchema).parse(existingAttempt.questions)
+          : taskQuiz.questions
+      } else {
+        questions = existingAttempt
+          ? z.array(practiceQuestionSchema).parse(existingAttempt.questions)
+          : await generateAcademicPractice({
+              userId: req.user!.id,
+              subject: task.subject.name,
+              grade: child.grade,
+              title: task.title,
+              description: task.description,
+            }).then((generated) => generated.map((question, index) => ({
+              ...question,
+              id: `${task.id}-generated-${index + 1}`,
+            })))
+      }
     } else {
       const subjectId = 'subjectId' in parsed.data ? parsed.data.subjectId : undefined
       if (!subjectId) {
@@ -394,12 +413,23 @@ studentRouter.post(
       if (updated.count !== 1) {
         throw new AppError(409, 'PRACTICE_ALREADY_SUBMITTED', 'Esta práctica ya se respondió')
       }
+      const task = attempt.taskId
+        ? await tx.task.findFirst({
+            where: { id: attempt.taskId, childId: child.id },
+            select: { id: true, title: true, quizQuestions: true },
+          })
+        : null
+      const isAssignedQuiz = Boolean(task?.quizQuestions)
       const evaluation = await tx.evaluation.create({
         data: {
           childId: child.id,
           subjectId: attempt.subjectId,
           practiceAttemptId: attempt.id,
-          title: attempt.taskId ? 'Cuestionario asignado' : 'Práctica: repaso',
+          title: isAssignedQuiz
+            ? 'Cuestionario asignado'
+            : task
+              ? `Práctica: ${task.title}`
+              : 'Práctica: repaso',
           score: Math.round((score / questions.length) * 10_000) / 100,
           maxScore: 100,
           evaluatedAt: completedAt,
@@ -410,16 +440,20 @@ studentRouter.post(
         data: {
           childId: child.id,
           points: 10,
-          reason: attempt.taskId ? 'Cuestionario asignado completado' : 'Práctica completada',
+          reason: isAssignedQuiz
+            ? 'Cuestionario asignado completado'
+            : task
+              ? 'Práctica de actividad completada'
+              : 'Práctica completada',
           sourceType: 'completed_practice',
           sourceId: attempt.id,
           practiceAttemptId: attempt.id,
           taskId: attempt.taskId,
         },
       })
-      if (attempt.taskId) {
+      if (isAssignedQuiz && task) {
         await tx.task.update({
-          where: { id: attempt.taskId },
+          where: { id: task.id },
           data: { status: 'completed' },
         })
       }

@@ -44,7 +44,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export function StudentTutorPage() {
-  const { user } = useAuth()
+  const { user, setUser } = useAuth()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [subjectId, setSubjectId] = useState('')
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -57,6 +57,7 @@ export function StudentTutorPage() {
   const [creating, setCreating] = useState(false)
   const [sending, setSending] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -203,6 +204,18 @@ export function StudentTutorPage() {
     }
   }
 
+  async function handleLogout() {
+    setLoggingOut(true)
+    setError('')
+    try {
+      await apiRequest<void>('/api/auth/logout', { method: 'POST' })
+      setUser(null)
+    } catch (logoutError) {
+      setError(getErrorMessage(logoutError))
+      setLoggingOut(false)
+    }
+  }
+
   if (loading) {
     return <main className="grid min-h-screen place-items-center bg-page text-tertiary">Preparando el tutor…</main>
   }
@@ -210,7 +223,14 @@ export function StudentTutorPage() {
   const selectedConversation = conversations.find((conversation) => conversation.id === selectedId)
 
   return (
-    <DashboardLayout brand="Tutor de estudio" description="Aprende con pistas y explicaciones paso a paso." items={tutorNavigation}>
+    <DashboardLayout
+      brand="Tutor de estudio"
+      description="Aprende con pistas y explicaciones paso a paso."
+      items={tutorNavigation}
+      onLogout={() => void handleLogout()}
+      logoutLabel={loggingOut ? 'Saliendo…' : 'Cerrar sesión'}
+      logoutDisabled={loggingOut}
+    >
         <DashboardModule id="tutor">
         <header id="inicio" className={`student-hero flex scroll-mt-32 flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/80 p-6 shadow-lg sm:p-8`}>
           <div>
