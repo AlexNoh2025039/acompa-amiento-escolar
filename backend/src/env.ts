@@ -24,12 +24,10 @@ const envSchema = z.object({
   GEMINI_TTS_MODEL: z.string().trim().min(1).default('gemini-3.8-flash-tts'),
   FFMPEG_PATH: z.string().trim().optional().transform((value) => value || undefined),
   VIDEO_FONT_PATH: z.string().trim().optional().transform((value) => value || undefined),
-  SMTP_HOST: z.string().trim().optional().transform((value) => value || undefined),
-  SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
-  SMTP_USER: z.string().trim().optional().transform((value) => value || undefined),
-  SMTP_PASS: z.string().optional().transform((value) => value || undefined),
-  SMTP_FROM: z.string().trim().email().optional().or(z.literal('')).transform((value) => value || undefined),
+  GMAIL_CLIENT_ID: z.string().trim().optional().transform((value) => value || undefined),
+  GMAIL_CLIENT_SECRET: z.string().trim().optional().transform((value) => value || undefined),
+  GMAIL_REFRESH_TOKEN: z.string().trim().optional().transform((value) => value || undefined),
+  GMAIL_FROM: z.string().trim().email().optional().or(z.literal('')).transform((value) => value || undefined),
 })
 
 const parsedEnv = envSchema.superRefine((value, context) => {
@@ -47,18 +45,18 @@ const parsedEnv = envSchema.superRefine((value, context) => {
       message: 'Configura juntos S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY',
     })
   }
-  if (Boolean(value.SMTP_USER) !== Boolean(value.SMTP_PASS)) {
+  const gmailConfigValues = [
+    value.GMAIL_CLIENT_ID,
+    value.GMAIL_CLIENT_SECRET,
+    value.GMAIL_REFRESH_TOKEN,
+    value.GMAIL_FROM,
+  ]
+  const gmailConfigCount = gmailConfigValues.filter(Boolean).length
+  if (gmailConfigCount > 0 && gmailConfigCount < gmailConfigValues.length) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ['SMTP_PASS'],
-      message: 'Configura juntos SMTP_USER y SMTP_PASS',
-    })
-  }
-  if (value.SMTP_FROM && !value.SMTP_HOST) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['SMTP_HOST'],
-      message: 'SMTP_HOST es obligatorio cuando se configura SMTP_FROM',
+      path: ['GMAIL_REFRESH_TOKEN'],
+      message: 'Configura juntos GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN y GMAIL_FROM',
     })
   }
 })

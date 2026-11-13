@@ -49,14 +49,14 @@ Para usar PostgreSQL instalado en Windows con pgAdmin:
 ## Servicios opcionales de Fase 4
 
 - **IA:** configura `GEMINI_API_KEY`. La aplicación no impone un cupo diario de uso de IA a los alumnos; el proveedor puede aplicar sus propias cuotas o límites. El acceso a Gemini sin clave devuelve un error explícito.
-- **Correo:** configura `SMTP_HOST`, `SMTP_FROM` y, si el servidor los exige, `SMTP_USER` y `SMTP_PASS`. Los enlaces de restablecimiento vencen en 30 minutos, son de un solo uso y no revelan si un correo está registrado.
+- **Correo:** el backend envía el restablecimiento mediante Gmail API por HTTPS. Configura `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` y `GMAIL_FROM` en el entorno del backend; no guardes credenciales reales en el repositorio. La cuenta autorizada debe coincidir con `GMAIL_FROM` y tener el alcance `gmail.send`. Los enlaces vencen en 30 minutos, son de un solo uso y no revelan si un correo está registrado. Los tokens OAuth de una aplicación externa en modo de prueba pueden caducar a los 7 días; cambia el estado de publicación y completa los requisitos de Google antes de depender de ella en producción.
 - **Archivos:** el desarrollo usa `STORAGE_PROVIDER=local` y guarda adjuntos/materiales fuera de `frontend/public`. Para despliegue, configura un bucket S3-compatible privado, `STORAGE_PROVIDER=s3` y sus credenciales en el backend. No hagas público el bucket.
 - **Migración de adjuntos:** configura S3 y ejecuta `pnpm --filter @aischool/backend uploads:migrate-to-s3` para copiar los adjuntos existentes. Comprueba los archivos copiados; solo añade `-- --delete-local` cuando quieras borrar las copias locales.
 - **Videos:** configura `FFMPEG_PATH` si FFmpeg no está en el `PATH`. `VIDEO_FONT_PATH` permite indicar el archivo de fuente TrueType. FFmpeg se instala aparte; el proyecto no descarga ni distribuye binarios.
 
 Adjuntos PDF e imágenes JPG/PNG/WebP tienen un límite de 10 MB y se validan por firma binaria. Lectura, audio y video se sirven mediante rutas autenticadas y con caché privada. La eliminación de la cuenta familiar elimina datos relacionales y pone los archivos en una cola de borrado reintentada por el backend.
 
-Si SMTP no está configurado, la solicitud de restablecimiento devuelve `503 EMAIL_NOT_CONFIGURED` para cualquier correo y no crea ni simula un envío.
+Si Gmail API no está configurada, la solicitud de restablecimiento devuelve `503 EMAIL_NOT_CONFIGURED` para cualquier correo y no crea ni simula un envío.
 
 ## Estructura
 
