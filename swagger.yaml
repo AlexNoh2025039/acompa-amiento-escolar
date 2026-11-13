@@ -1,0 +1,2290 @@
+  openapi: 3.0.0
+  info:
+    title: API de Acompañamiento Escolar
+    version: 1.0.0
+    description: |
+      Documentación de las rutas HTTP registradas por el backend.
+      Las rutas requieren la cookie `access_token` excepto las marcadas como públicas.
+      Las cargas de archivos se envían como `multipart/form-data`; el campo del archivo es `file`
+      y el tamaño máximo admitido es 10 MB. No se definen parámetros de consulta.
+  servers:
+    - url: http://localhost:3001
+      description: Backend local (puerto predeterminado)
+  tags:
+    - name: Salud
+    - name: Autenticación
+    - name: Familias
+    - name: Hijos
+    - name: Materias
+    - name: Horarios
+    - name: Tareas
+    - name: Materiales de aprendizaje
+    - name: Estudiantes
+    - name: Prácticas
+    - name: Tutor
+  security:
+    - accessCookie: []
+  paths:
+    /api/health:
+      get:
+        tags: [Salud]
+        summary: Comprobar disponibilidad del API
+        security: []
+        responses:
+          '200':
+            description: El servidor está activo.
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    ok:
+                      type: boolean
+                      example: true
+                example:
+                  ok: true
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/auth/register:
+      post:
+        tags: [Autenticación]
+        summary: Registrar una cuenta de padre o encargado
+        security: []
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterRequest'
+              example:
+                fullName: María López
+                email: maria.lopez@example.com
+                password: Escuela2026
+                confirmPassword: Escuela2026
+        responses:
+          '201':
+            description: Cuenta y familia creadas. También establece las cookies de sesión.
+            headers:
+              Set-Cookie:
+                description: Incluye `access_token` y `refresh_token` como cookies HttpOnly.
+                schema:
+                  type: string
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    user:
+                      $ref: '#/components/schemas/User'
+                example:
+                  user:
+                    id: cm7x1parent001
+                    fullName: María López
+                    email: maria.lopez@example.com
+                    role: parent
+                    familyId: cm7x1family001
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '429':
+            $ref: '#/components/responses/RateLimited'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/auth/login:
+      post:
+        tags: [Autenticación]
+        summary: Iniciar sesión
+        security: []
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginRequest'
+              example:
+                email: maria.lopez@example.com
+                password: Escuela2026
+        responses:
+          '200':
+            description: Inicio de sesión correcto. Establece cookies de sesión.
+            headers:
+              Set-Cookie:
+                description: Incluye `access_token` y `refresh_token` como cookies HttpOnly.
+                schema:
+                  type: string
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    user:
+                      $ref: '#/components/schemas/User'
+                example:
+                  user:
+                    id: cm7x1parent001
+                    fullName: María López
+                    email: maria.lopez@example.com
+                    role: parent
+                    familyId: cm7x1family001
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '429':
+            $ref: '#/components/responses/RateLimited'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/auth/refresh:
+      post:
+        tags: [Autenticación]
+        summary: Renovar la sesión usando la cookie de actualización
+        security:
+          - refreshCookie: []
+        responses:
+          '200':
+            description: Sesión renovada; se envían nuevas cookies.
+            headers:
+              Set-Cookie:
+                description: Nuevas cookies `access_token` y `refresh_token`.
+                schema:
+                  type: string
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    user:
+                      $ref: '#/components/schemas/User'
+                example:
+                  user:
+                    id: cm7x1parent001
+                    fullName: María López
+                    email: maria.lopez@example.com
+                    role: parent
+                    familyId: cm7x1family001
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/auth/logout:
+      post:
+        tags: [Autenticación]
+        summary: Cerrar sesión y revocar la cookie de actualización
+        security:
+          - refreshCookie: []
+        responses:
+          '204':
+            description: Sesión cerrada y cookies eliminadas.
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/auth/me:
+      get:
+        tags: [Autenticación]
+        summary: Obtener los datos del usuario autenticado
+        responses:
+          '200':
+            description: Datos públicos de la cuenta actual.
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    user:
+                      $ref: '#/components/schemas/User'
+                example:
+                  user:
+                    id: cm7x1parent001
+                    fullName: María López
+                    email: maria.lopez@example.com
+                    role: parent
+                    familyId: cm7x1family001
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/auth/forgot-password:
+      post:
+        tags: [Autenticación]
+        summary: Solicitar un correo para restablecer la contraseña
+        security: []
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordRequest'
+              example:
+                email: maria.lopez@example.com
+        responses:
+          '202':
+            description: Solicitud aceptada. El mensaje no revela si el correo está registrado.
+            content:
+              application/json:
+                example:
+                  message: Si el correo está registrado, recibirás instrucciones para restablecer tu contraseña.
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '429':
+            $ref: '#/components/responses/RateLimited'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+          '503':
+            $ref: '#/components/responses/ServiceUnavailable'
+
+    /api/auth/reset-password:
+      post:
+        tags: [Autenticación]
+        summary: Establecer una contraseña nueva usando un token de un solo uso
+        security: []
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordRequest'
+              example:
+                token: token-de-restablecimiento-de-ejemplo
+                password: NuevaEscuela2026
+                confirmPassword: NuevaEscuela2026
+        responses:
+          '204':
+            description: Contraseña actualizada; sesiones anteriores revocadas.
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '429':
+            $ref: '#/components/responses/RateLimited'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me:
+      get:
+        tags: [Familias]
+        summary: Obtener la familia asociada a la sesión
+        responses:
+          '200':
+            description: Familia del usuario actual.
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    family:
+                      $ref: '#/components/schemas/Family'
+                example:
+                  family:
+                    id: cm7x1family001
+                    name: Familia de María López
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      put:
+        tags: [Familias]
+        summary: Cambiar el nombre de la familia
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyUpdateRequest'
+              example:
+                name: Familia López
+        responses:
+          '200':
+            description: Familia actualizada.
+            content:
+              application/json:
+                example:
+                  family:
+                    id: cm7x1family001
+                    name: Familia López
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      delete:
+        tags: [Familias]
+        summary: Eliminar la familia y sus datos asociados
+        description: Puede responder 202 si algunos archivos privados siguen pendientes de eliminación.
+        responses:
+          '202':
+            description: Cuenta eliminada; hay archivos pendientes de borrado.
+            content:
+              application/json:
+                example:
+                  message: La cuenta se eliminó. Algunos archivos privados siguen en cola de borrado y se volverán a intentar automáticamente.
+          '204':
+            description: Familia eliminada correctamente.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/overview:
+      get:
+        tags: [Familias]
+        summary: Obtener el resumen familiar y el progreso de los hijos
+        responses:
+          '200':
+            description: Resumen de tareas, evaluaciones, puntos y progreso por hijo.
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    family:
+                      $ref: '#/components/schemas/Family'
+                    children:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ChildOverview'
+                example:
+                  family:
+                    id: cm7x1family001
+                    name: Familia de María López
+                  children:
+                    - id: cm7x1child001
+                      fullName: Sofía López
+                      grade: 5.º grado
+                      tasks:
+                        pending: 2
+                        inProgress: 1
+                        completed: 4
+                      nextTask:
+                        title: Lectura de ciencias
+                        dueAt: '2026-11-20T23:59:00.000Z'
+                      averageScore: 86.5
+                      evaluationCount: 2
+                      points: 45
+                      subjectAverages:
+                        - name: Ciencias
+                          averageScore: 86.5
+                          evaluationCount: 2
+                      gradeHistory: []
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children:
+      get:
+        tags: [Hijos]
+        summary: Listar los perfiles de hijos de la familia
+        responses:
+          '200':
+            description: Perfiles con materias asignadas y cuenta vinculada, si existe.
+            content:
+              application/json:
+                example:
+                  children:
+                    - id: cm7x1child001
+                      fullName: Sofía López
+                      birthDate: '2015-03-14T00:00:00.000Z'
+                      grade: 5.º grado
+                      subjects:
+                        - id: cm7x1subject001
+                          name: Ciencias
+                      user:
+                        id: cm7x1student001
+                        email: sofia.lopez@example.com
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      post:
+        tags: [Hijos]
+        summary: Crear un perfil de hijo
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildCreateRequest'
+              example:
+                fullName: Sofía López
+                birthDate: '2015-03-14'
+                grade: 5.º grado
+        responses:
+          '201':
+            description: Perfil creado.
+            content:
+              application/json:
+                example:
+                  child:
+                    id: cm7x1child001
+                    fullName: Sofía López
+                    birthDate: '2015-03-14T00:00:00.000Z'
+                    grade: 5.º grado
+                    subjects: []
+                    user: null
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/account:
+      post:
+        tags: [Hijos, Autenticación]
+        summary: Crear una cuenta de estudiante para un perfil existente
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAccountRequest'
+              example:
+                email: sofia.lopez@example.com
+                password: Alumna2026
+                confirmPassword: Alumna2026
+        responses:
+          '201':
+            description: Cuenta de estudiante creada y vinculada al perfil.
+            content:
+              application/json:
+                example:
+                  student:
+                    id: cm7x1student001
+                    fullName: Sofía López
+                    email: sofia.lopez@example.com
+                    role: student
+                    familyId: cm7x1family001
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}:
+      patch:
+        tags: [Hijos]
+        summary: Actualizar datos de un hijo
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildUpdateRequest'
+              example:
+                fullName: Sofía María López
+                grade: 6.º grado
+        responses:
+          '200':
+            description: Perfil actualizado.
+            content:
+              application/json:
+                example:
+                  child:
+                    id: cm7x1child001
+                    fullName: Sofía María López
+                    birthDate: '2015-03-14T00:00:00.000Z'
+                    grade: 6.º grado
+                    familyId: cm7x1family001
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      delete:
+        tags: [Hijos]
+        summary: Eliminar un perfil de hijo y su cuenta vinculada
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+        description: Puede responder 202 si algunos archivos privados siguen pendientes de eliminación.
+        responses:
+          '202':
+            description: Perfil eliminado; hay archivos pendientes de borrado.
+            content:
+              application/json:
+                example:
+                  message: El perfil se eliminó. Algunos archivos privados siguen en cola de borrado y se volverán a intentar automáticamente.
+          '204':
+            description: Perfil eliminado correctamente.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/subjects:
+      get:
+        tags: [Materias]
+        summary: Listar las materias del catálogo
+        responses:
+          '200':
+            description: Materias disponibles ordenadas por nombre.
+            content:
+              application/json:
+                example:
+                  subjects:
+                    - id: cm7x1subject001
+                      name: Ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      post:
+        tags: [Materias]
+        summary: Agregar una materia al catálogo
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectRequest'
+              example:
+                name: Ciencias
+        responses:
+          '201':
+            description: Materia creada.
+            content:
+              application/json:
+                example:
+                  subject:
+                    id: cm7x1subject001
+                    name: Ciencias
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/subjects:
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+      get:
+        tags: [Materias]
+        summary: Listar las materias asignadas a un hijo
+        responses:
+          '200':
+            description: Materias asignadas al perfil.
+            content:
+              application/json:
+                example:
+                  subjects:
+                    - id: cm7x1subject001
+                      name: Ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      post:
+        tags: [Materias]
+        summary: Asignar una materia a un hijo
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectRequest'
+              example:
+                name: Ciencias
+        responses:
+          '201':
+            description: Materia asignada (o creada si no estaba en el catálogo).
+            content:
+              application/json:
+                example:
+                  subject:
+                    id: cm7x1subject001
+                    name: Ciencias
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/subjects/{subjectId}:
+      delete:
+        tags: [Materias]
+        summary: Quitar una materia de un hijo
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+          - $ref: '#/components/parameters/SubjectId'
+        responses:
+          '204':
+            description: Materia desasignada.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/schedules:
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+      get:
+        tags: [Horarios]
+        summary: Listar el horario de un hijo
+        responses:
+          '200':
+            description: Bloques de horario ordenados por día y hora.
+            content:
+              application/json:
+                example:
+                  schedules:
+                    - id: cm7x1schedule001
+                      childId: cm7x1child001
+                      subjectId: cm7x1subject001
+                      dayOfWeek: monday
+                      startTime: '16:00'
+                      endTime: '17:00'
+                      subject:
+                        id: cm7x1subject001
+                        name: Ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      post:
+        tags: [Horarios]
+        summary: Crear un bloque de horario
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleRequest'
+              example:
+                subjectId: cm7x1subject001
+                dayOfWeek: monday
+                startTime: '16:00'
+                endTime: '17:00'
+        responses:
+          '201':
+            description: Bloque de horario creado.
+            content:
+              application/json:
+                example:
+                  schedule:
+                    id: cm7x1schedule001
+                    childId: cm7x1child001
+                    subjectId: cm7x1subject001
+                    dayOfWeek: monday
+                    startTime: '16:00'
+                    endTime: '17:00'
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/schedules/{scheduleId}:
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+        - $ref: '#/components/parameters/ScheduleId'
+      patch:
+        tags: [Horarios]
+        summary: Actualizar un bloque de horario
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleRequest'
+              example:
+                subjectId: cm7x1subject001
+                dayOfWeek: tuesday
+                startTime: '16:30'
+                endTime: '17:30'
+        responses:
+          '200':
+            description: Bloque actualizado.
+            content:
+              application/json:
+                example:
+                  schedule:
+                    id: cm7x1schedule001
+                    childId: cm7x1child001
+                    subjectId: cm7x1subject001
+                    dayOfWeek: tuesday
+                    startTime: '16:30'
+                    endTime: '17:30'
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      delete:
+        tags: [Horarios]
+        summary: Eliminar un bloque de horario
+        responses:
+          '204':
+            description: Bloque eliminado.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/tasks:
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+      get:
+        tags: [Tareas]
+        summary: Listar las tareas asignadas a un hijo
+        responses:
+          '200':
+            description: Tareas con materia, adjuntos e indicador de cuestionario.
+            content:
+              application/json:
+                example:
+                  tasks:
+                    - id: cm7x1task001
+                      title: Lectura de ciencias
+                      description: Leer el capítulo sobre los ecosistemas.
+                      type: reading
+                      status: pending
+                      dueAt: '2026-11-20T23:59:00.000Z'
+                      isQuiz: true
+                      readingContent: Lee el texto sobre los ecosistemas.
+                      attachments: []
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      post:
+        tags: [Tareas]
+        summary: Crear una tarea para un hijo
+        description: Si `createQuiz` es true o `type` es `reading`, genera preguntas; en ese caso se requiere `subjectId`.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreateRequest'
+              example:
+                subjectId: cm7x1subject001
+                title: Lectura de ciencias
+                description: Leer el capítulo sobre los ecosistemas.
+                type: reading
+                dueAt: '2026-11-20T23:59:00.000Z'
+        responses:
+          '201':
+            description: Tarea creada.
+            content:
+              application/json:
+                example:
+                  task:
+                    id: cm7x1task001
+                    title: Lectura de ciencias
+                    description: Leer el capítulo sobre los ecosistemas.
+                    type: reading
+                    status: pending
+                    isQuiz: true
+                    readingContent: Lee el texto sobre los ecosistemas.
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/tasks/{taskId}:
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+        - $ref: '#/components/parameters/TaskId'
+      patch:
+        tags: [Tareas]
+        summary: Actualizar una tarea
+        description: Los cuestionarios existentes no permiten cambiar su materia ni su tipo.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskUpdateRequest'
+              example:
+                title: Lectura de ecosistemas
+                status: in_progress
+                dueAt: '2026-11-21T23:59:00.000Z'
+        responses:
+          '200':
+            description: Tarea actualizada.
+            content:
+              application/json:
+                example:
+                  task:
+                    id: cm7x1task001
+                    title: Lectura de ecosistemas
+                    type: reading
+                    status: in_progress
+                    isQuiz: true
+                    readingContent: Lee el texto sobre los ecosistemas.
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      delete:
+        tags: [Tareas]
+        summary: Eliminar una tarea y sus adjuntos
+        responses:
+          '204':
+            description: Tarea eliminada.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/tasks/{taskId}/review:
+      post:
+        tags: [Tareas]
+        summary: Revisar una tarea completada y otorgar puntos
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+          - $ref: '#/components/parameters/TaskId'
+        responses:
+          '200':
+            description: Tarea revisada; se otorgan 5 puntos.
+            content:
+              application/json:
+                example:
+                  task:
+                    id: cm7x1task001
+                    reviewedAt: '2026-11-12T15:00:00.000Z'
+                  pointsAwarded: 5
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/tasks/{taskId}/attachments:
+      post:
+        tags: [Tareas]
+        summary: Adjuntar un archivo a una tarea
+        description: Acepta PDF, JPEG, PNG o WebP; máximo 10 MB.
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+          - $ref: '#/components/parameters/TaskId'
+        requestBody:
+          required: true
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [file]
+                properties:
+                  file:
+                    type: string
+                    format: binary
+              encoding:
+                file:
+                  contentType: application/pdf, image/jpeg, image/png, image/webp
+        responses:
+          '201':
+            description: Archivo almacenado y asociado a la tarea.
+            content:
+              application/json:
+                example:
+                  attachment:
+                    id: cm7x1attachment001
+                    originalName: guia-ciencias.pdf
+                    mimeType: application/pdf
+                    createdAt: '2026-11-12T15:00:00.000Z'
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '413':
+            $ref: '#/components/responses/PayloadTooLarge'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/tasks/{taskId}/attachments/{attachmentId}:
+      parameters:
+        - $ref: '#/components/parameters/ChildId'
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/AttachmentId'
+      get:
+        tags: [Tareas]
+        summary: Descargar un adjunto de tarea
+        responses:
+          '200':
+            description: Contenido del archivo adjunto.
+            content:
+              application/pdf:
+                schema:
+                  type: string
+                  format: binary
+              image/jpeg:
+                schema:
+                  type: string
+                  format: binary
+              image/png:
+                schema:
+                  type: string
+                  format: binary
+              image/webp:
+                schema:
+                  type: string
+                  format: binary
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      delete:
+        tags: [Tareas]
+        summary: Eliminar un adjunto de tarea
+        responses:
+          '204':
+            description: Adjunto eliminado.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/evaluations:
+      get:
+        tags: [Estudiantes]
+        summary: Consultar evaluaciones de práctica de un hijo
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+        responses:
+          '200':
+            description: Evaluaciones ordenadas desde la más reciente.
+            content:
+              application/json:
+                example:
+                  evaluations:
+                    - id: cm7x1evaluation001
+                      title: Práctica: repaso
+                      score: 80
+                      maxScore: 100
+                      evaluatedAt: '2026-11-12T15:00:00.000Z'
+                      subject:
+                        id: cm7x1subject001
+                        name: Ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/learning-artifacts:
+      get:
+        tags: [Materiales de aprendizaje]
+        summary: Listar materiales de aprendizaje de un hijo
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+        responses:
+          '200':
+            description: Hasta 50 materiales recientes; incluye enlace si hay archivo privado.
+            content:
+              application/json:
+                example:
+                  artifacts:
+                    - id: cm7x1artifact001
+                      type: summary
+                      title: Resumen de ecosistemas
+                      content: Un ecosistema está formado por los seres vivos y su entorno.
+                      fileUrl: null
+                      subject:
+                        id: cm7x1subject001
+                        name: Ciencias
+                      task:
+                        id: cm7x1task001
+                        title: Lectura de ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/children/{childId}/learning-artifacts/{artifactId}/file:
+      get:
+        tags: [Materiales de aprendizaje]
+        summary: Descargar el archivo de un material de aprendizaje
+        parameters:
+          - $ref: '#/components/parameters/ChildId'
+          - $ref: '#/components/parameters/ArtifactId'
+        responses:
+          '200':
+            description: Archivo del material (por ejemplo, audio WAV o video MP4).
+            content:
+              application/octet-stream:
+                schema:
+                  type: string
+                  format: binary
+              audio/wav:
+                schema:
+                  type: string
+                  format: binary
+              video/mp4:
+                schema:
+                  type: string
+                  format: binary
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/families/me/notification-preferences:
+      get:
+        tags: [Familias]
+        summary: Consultar preferencias de notificaciones
+        responses:
+          '200':
+            description: Preferencias actuales; devuelve valores predeterminados si aún no existen.
+            content:
+              application/json:
+                example:
+                  preference:
+                    emailSummary: false
+                    reminderTime: '18:30'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      put:
+        tags: [Familias]
+        summary: Guardar preferencias de notificaciones
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesRequest'
+              example:
+                emailSummary: true
+                reminderTime: '18:30'
+        responses:
+          '200':
+            description: Preferencias guardadas.
+            content:
+              application/json:
+                example:
+                  preference:
+                    emailSummary: true
+                    reminderTime: '18:30'
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/ai/usage:
+      get:
+        tags: [Estudiantes]
+        summary: Consultar el uso de funciones de inteligencia artificial
+        responses:
+          '200':
+            description: Cuota de IA del estudiante.
+            content:
+              application/json:
+                example:
+                  usage:
+                    used: 2
+                    limit: 5
+                    remaining: 3
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/me:
+      get:
+        tags: [Estudiantes]
+        summary: Obtener perfil, materias, horario y tareas del estudiante
+        responses:
+          '200':
+            description: Datos para el panel del estudiante.
+            content:
+              application/json:
+                example:
+                  student:
+                    id: cm7x1student001
+                    fullName: Sofía López
+                    email: sofia.lopez@example.com
+                    grade: 5.º grado
+                    birthDate: '2015-03-14T00:00:00.000Z'
+                    familyName: Familia de María López
+                    points: 45
+                  subjects:
+                    - id: cm7x1subject001
+                      name: Ciencias
+                  schedules: []
+                  tasks:
+                    - id: cm7x1task001
+                      title: Lectura de ciencias
+                      status: pending
+                      isQuiz: true
+                      readingContent: Lee el texto sobre los ecosistemas.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tasks:
+      post:
+        tags: [Tareas]
+        summary: Intentar crear una tarea desde la cuenta de estudiante
+        description: Esta ruta siempre rechaza la operación; las tareas solo las asigna un padre o encargado.
+        responses:
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tasks/{taskId}:
+      patch:
+        tags: [Tareas]
+        summary: Actualizar el estado de una tarea del estudiante
+        parameters:
+          - $ref: '#/components/parameters/TaskId'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusRequest'
+              example:
+                status: in_progress
+        responses:
+          '200':
+            description: Tarea actualizada.
+            content:
+              application/json:
+                example:
+                  task:
+                    id: cm7x1task001
+                    title: Lectura de ciencias
+                    status: in_progress
+                    isQuiz: true
+                    readingContent: Lee el texto sobre los ecosistemas.
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tasks/{taskId}/attachments/{attachmentId}:
+      get:
+        tags: [Tareas]
+        summary: Descargar un adjunto de una tarea asignada al estudiante
+        parameters:
+          - $ref: '#/components/parameters/TaskId'
+          - $ref: '#/components/parameters/AttachmentId'
+        responses:
+          '200':
+            description: Contenido del archivo adjunto.
+            content:
+              application/pdf:
+                schema:
+                  type: string
+                  format: binary
+              image/jpeg:
+                schema:
+                  type: string
+                  format: binary
+              image/png:
+                schema:
+                  type: string
+                  format: binary
+              image/webp:
+                schema:
+                  type: string
+                  format: binary
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tasks/{taskId}/learning-artifacts:
+      post:
+        tags: [Materiales de aprendizaje]
+        summary: Generar material de aprendizaje a partir de una tarea
+        parameters:
+          - $ref: '#/components/parameters/TaskId'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningArtifactRequest'
+              example:
+                type: summary
+                attachmentId: cm7x1attachment001
+        responses:
+          '201':
+            description: Material generado.
+            content:
+              application/json:
+                example:
+                  artifact:
+                    id: cm7x1artifact001
+                    type: summary
+                    content: Un ecosistema está formado por los seres vivos y su entorno.
+                    fileUrl: null
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/learning-artifacts:
+      get:
+        tags: [Materiales de aprendizaje]
+        summary: Listar materiales de aprendizaje del estudiante
+        responses:
+          '200':
+            description: Hasta 30 materiales recientes.
+            content:
+              application/json:
+                example:
+                  artifacts:
+                    - id: cm7x1artifact001
+                      type: summary
+                      content: Un ecosistema está formado por los seres vivos y su entorno.
+                      fileUrl: null
+                      subject:
+                        id: cm7x1subject001
+                        name: Ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/learning-artifacts/{artifactId}/file:
+      get:
+        tags: [Materiales de aprendizaje]
+        summary: Descargar un archivo generado para el estudiante
+        parameters:
+          - $ref: '#/components/parameters/ArtifactId'
+        responses:
+          '200':
+            description: Archivo privado del material.
+            content:
+              application/octet-stream:
+                schema:
+                  type: string
+                  format: binary
+              audio/wav:
+                schema:
+                  type: string
+                  format: binary
+              video/mp4:
+                schema:
+                  type: string
+                  format: binary
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/practice/start:
+      post:
+        tags: [Prácticas]
+        summary: Iniciar una práctica o cuestionario
+        description: Se debe enviar exactamente uno de `subjectId`, `artifactId` o `taskId`.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [subjectId]
+                    additionalProperties: false
+                    properties:
+                      subjectId:
+                        type: string
+                  - type: object
+                    required: [artifactId]
+                    additionalProperties: false
+                    properties:
+                      artifactId:
+                        type: string
+                  - type: object
+                    required: [taskId]
+                    additionalProperties: false
+                    properties:
+                      taskId:
+                        type: string
+              examples:
+                porMateria:
+                  value:
+                    subjectId: cm7x1subject001
+                porMaterial:
+                  value:
+                    artifactId: cm7x1artifact001
+                porTarea:
+                  value:
+                    taskId: cm7x1task001
+        responses:
+          '201':
+            description: Práctica iniciada. Las respuestas correctas no se exponen.
+            content:
+              application/json:
+                example:
+                  token: eyJhbGciOiJIUzI1NiJ9.ejE...
+                  subject:
+                    id: cm7x1subject001
+                    name: Ciencias
+                  reading: Lee el texto sobre los ecosistemas.
+                  questions:
+                    - id: cm7x1question001
+                      prompt: ¿Qué es un ecosistema?
+                      options:
+                        - Un conjunto de seres vivos y su entorno
+                        - Una sola especie
+                        - Un tipo de clima
+                        - Una cadena alimenticia
+                      explanation: Un ecosistema incluye seres vivos y los elementos de su ambiente.
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/practice/submit:
+      post:
+        tags: [Prácticas]
+        summary: Enviar las respuestas de una práctica
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PracticeSubmitRequest'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9.ejE...
+                answers: [0, 2, 1, 3, 0]
+        responses:
+          '200':
+            description: Resultado calculado; registra la evaluación y otorga 10 puntos.
+            content:
+              application/json:
+                example:
+                  result:
+                    score: 4
+                    total: 5
+                    percentage: 80
+                    evaluation:
+                      id: cm7x1evaluation001
+                      title: Práctica: repaso
+                      score: 80
+                      maxScore: 100
+                      evaluatedAt: '2026-11-12T15:00:00.000Z'
+                    answers:
+                      - questionId: cm7x1question001
+                        correct: true
+                        correctAnswer: Un conjunto de seres vivos y su entorno
+                        explanation: Un ecosistema incluye seres vivos y los elementos de su ambiente.
+                  pointsAwarded: 10
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '409':
+            $ref: '#/components/responses/Conflict'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/results:
+      get:
+        tags: [Prácticas]
+        summary: Consultar resultados y prácticas completadas
+        responses:
+          '200':
+            description: Evaluaciones e intentos completados recientes.
+            content:
+              application/json:
+                example:
+                  evaluations:
+                    - id: cm7x1evaluation001
+                      title: Práctica: repaso
+                      score: 80
+                      maxScore: 100
+                      evaluatedAt: '2026-11-12T15:00:00.000Z'
+                  attempts:
+                    - id: cm7x1attempt001
+                      total: 5
+                      score: 4
+                      completedAt: '2026-11-12T15:00:00.000Z'
+                      subject:
+                        id: cm7x1subject001
+                        name: Ciencias
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tutor/conversations:
+      get:
+        tags: [Tutor]
+        summary: Listar conversaciones activas del tutor
+        responses:
+          '200':
+            description: Hasta 50 conversaciones recientes.
+            content:
+              application/json:
+                example:
+                  conversations:
+                    - id: cm7x1conversation001
+                      title: Ecosistemas
+                      subject:
+                        id: cm7x1subject001
+                        name: Ciencias
+                      createdAt: '2026-11-12T14:00:00.000Z'
+                      updatedAt: '2026-11-12T14:10:00.000Z'
+                      expiresAt: '2026-12-12T14:10:00.000Z'
+                      _count:
+                        messages: 2
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      post:
+        tags: [Tutor]
+        summary: Crear una conversación de tutor en una materia asignada
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TutorConversationRequest'
+              example:
+                subjectId: cm7x1subject001
+        responses:
+          '201':
+            description: Conversación creada; vence en 30 días.
+            content:
+              application/json:
+                example:
+                  conversation:
+                    id: cm7x1conversation001
+                    title: Nueva conversación
+                    subject:
+                      id: cm7x1subject001
+                      name: Ciencias
+                    createdAt: '2026-11-12T14:00:00.000Z'
+                    updatedAt: '2026-11-12T14:00:00.000Z'
+                    expiresAt: '2026-12-12T14:00:00.000Z'
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '429':
+            $ref: '#/components/responses/RateLimited'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tutor/conversations/{conversationId}:
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      get:
+        tags: [Tutor]
+        summary: Consultar una conversación y sus mensajes
+        responses:
+          '200':
+            description: Conversación y mensajes ordenados cronológicamente.
+            content:
+              application/json:
+                example:
+                  conversation:
+                    id: cm7x1conversation001
+                    title: Ecosistemas
+                    subject:
+                      id: cm7x1subject001
+                      name: Ciencias
+                    messages:
+                      - id: cm7x1message001
+                        role: student
+                        content: ¿Qué es un ecosistema?
+                        createdAt: '2026-11-12T14:01:00.000Z'
+                        attachment: null
+                      - id: cm7x1message002
+                        role: assistant
+                        content: Es el conjunto de seres vivos y el entorno donde interactúan.
+                        createdAt: '2026-11-12T14:01:01.000Z'
+                        attachment: null
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+      delete:
+        tags: [Tutor]
+        summary: Eliminar una conversación del tutor
+        responses:
+          '204':
+            description: Conversación eliminada.
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tutor/conversations/{conversationId}/messages:
+      post:
+        tags: [Tutor]
+        summary: Enviar un mensaje o adjuntar una imagen/PDF al tutor
+        description: Acepta texto de hasta 4000 caracteres y, opcionalmente, un archivo PDF/JPEG/PNG/WebP de hasta 10 MB.
+        parameters:
+          - $ref: '#/components/parameters/ConversationId'
+        requestBody:
+          required: true
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+                    maxLength: 4000
+                    example: ¿Me ayudas a entender este ejercicio?
+                  file:
+                    type: string
+                    format: binary
+              encoding:
+                file:
+                  contentType: application/pdf, image/jpeg, image/png, image/webp
+        responses:
+          '201':
+            description: Mensaje del estudiante y respuesta del tutor guardados.
+            content:
+              application/json:
+                example:
+                  studentMessage:
+                    id: cm7x1message003
+                    role: student
+                    content: ¿Me ayudas a entender este ejercicio?
+                    createdAt: '2026-11-12T14:20:00.000Z'
+                    attachment: null
+                  assistantMessage:
+                    id: cm7x1message004
+                    role: assistant
+                    content: Claro. Primero identifica qué información te da el problema.
+                    createdAt: '2026-11-12T14:20:00.001Z'
+                    attachment: null
+                  expiresAt: '2026-12-12T14:20:00.000Z'
+          '400':
+            $ref: '#/components/responses/BadRequest'
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '413':
+            $ref: '#/components/responses/PayloadTooLarge'
+          '429':
+            $ref: '#/components/responses/RateLimited'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+    /api/student/tutor/conversations/{conversationId}/messages/{messageId}/file:
+      get:
+        tags: [Tutor]
+        summary: Descargar un adjunto enviado en un mensaje del tutor
+        parameters:
+          - $ref: '#/components/parameters/ConversationId'
+          - $ref: '#/components/parameters/MessageId'
+        responses:
+          '200':
+            description: Archivo privado adjunto al mensaje.
+            content:
+              application/octet-stream:
+                schema:
+                  type: string
+                  format: binary
+              application/pdf:
+                schema:
+                  type: string
+                  format: binary
+              image/jpeg:
+                schema:
+                  type: string
+                  format: binary
+              image/png:
+                schema:
+                  type: string
+                  format: binary
+              image/webp:
+                schema:
+                  type: string
+                  format: binary
+          '401':
+            $ref: '#/components/responses/Unauthorized'
+          '403':
+            $ref: '#/components/responses/Forbidden'
+          '404':
+            $ref: '#/components/responses/NotFound'
+          '500':
+            $ref: '#/components/responses/InternalServerError'
+
+  components:
+    securitySchemes:
+      accessCookie:
+        type: apiKey
+        in: cookie
+        name: access_token
+        description: Cookie de acceso emitida por el registro o inicio de sesión.
+      refreshCookie:
+        type: apiKey
+        in: cookie
+        name: refresh_token
+        description: Cookie de actualización emitida por el registro o inicio de sesión.
+    parameters:
+      ChildId:
+        name: childId
+        in: path
+        required: true
+        description: Identificador del perfil del hijo.
+        schema:
+          type: string
+        example: cm7x1child001
+      SubjectId:
+        name: subjectId
+        in: path
+        required: true
+        description: Identificador de la materia.
+        schema:
+          type: string
+        example: cm7x1subject001
+      ScheduleId:
+        name: scheduleId
+        in: path
+        required: true
+        description: Identificador del bloque de horario.
+        schema:
+          type: string
+        example: cm7x1schedule001
+      TaskId:
+        name: taskId
+        in: path
+        required: true
+        description: Identificador de la tarea.
+        schema:
+          type: string
+        example: cm7x1task001
+      AttachmentId:
+        name: attachmentId
+        in: path
+        required: true
+        description: Identificador del archivo adjunto.
+        schema:
+          type: string
+        example: cm7x1attachment001
+      ArtifactId:
+        name: artifactId
+        in: path
+        required: true
+        description: Identificador del material de aprendizaje.
+        schema:
+          type: string
+        example: cm7x1artifact001
+      ConversationId:
+        name: conversationId
+        in: path
+        required: true
+        description: Identificador de la conversación del tutor.
+        schema:
+          type: string
+        example: cm7x1conversation001
+      MessageId:
+        name: messageId
+        in: path
+        required: true
+        description: Identificador del mensaje.
+        schema:
+          type: string
+        example: cm7x1message001
+    schemas:
+      ErrorResponse:
+        type: object
+        properties:
+          error:
+            type: object
+            properties:
+              code:
+                type: string
+                example: VALIDATION
+              message:
+                type: string
+                example: Revisa los datos ingresados
+              fields:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+                example:
+                  email: [Ingresa un correo válido]
+        required: [error]
+      User:
+        type: object
+        properties:
+          id:
+            type: string
+            example: cm7x1parent001
+          fullName:
+            type: string
+            example: María López
+          email:
+            type: string
+            format: email
+            example: maria.lopez@example.com
+          role:
+            type: string
+            enum: [parent, student]
+            example: parent
+          familyId:
+            type: string
+            example: cm7x1family001
+        required: [id, fullName, email, role, familyId]
+      Family:
+        type: object
+        properties:
+          id:
+            type: string
+            example: cm7x1family001
+          name:
+            type: string
+            nullable: true
+            example: Familia de María López
+      RegisterRequest:
+        type: object
+        required: [fullName, email, password, confirmPassword]
+        properties:
+          fullName:
+            type: string
+            minLength: 2
+            maxLength: 120
+            example: María López
+          email:
+            type: string
+            format: email
+            maxLength: 254
+            example: maria.lopez@example.com
+          password:
+            type: string
+            minLength: 8
+            description: Debe incluir al menos una letra y un número.
+            example: Escuela2026
+          confirmPassword:
+            type: string
+            example: Escuela2026
+      LoginRequest:
+        type: object
+        required: [email, password]
+        properties:
+          email:
+            type: string
+            format: email
+            example: maria.lopez@example.com
+          password:
+            type: string
+            example: Escuela2026
+      ForgotPasswordRequest:
+        type: object
+        required: [email]
+        properties:
+          email:
+            type: string
+            format: email
+            maxLength: 254
+            example: maria.lopez@example.com
+      ResetPasswordRequest:
+        type: object
+        required: [token, password, confirmPassword]
+        properties:
+          token:
+            type: string
+            minLength: 1
+            example: token-de-restablecimiento-de-ejemplo
+          password:
+            type: string
+            minLength: 8
+            description: Debe incluir al menos una letra y un número.
+            example: NuevaEscuela2026
+          confirmPassword:
+            type: string
+            example: NuevaEscuela2026
+      FamilyUpdateRequest:
+        type: object
+        required: [name]
+        properties:
+          name:
+            type: string
+            minLength: 2
+            maxLength: 120
+            example: Familia López
+      ChildCreateRequest:
+        type: object
+        required: [fullName, birthDate, grade]
+        properties:
+          fullName:
+            type: string
+            minLength: 2
+            maxLength: 120
+            example: Sofía López
+          birthDate:
+            type: string
+            format: date
+            example: '2015-03-14'
+          grade:
+            type: string
+            minLength: 1
+            maxLength: 80
+            example: 5.º grado
+      ChildUpdateRequest:
+        type: object
+        minProperties: 1
+        properties:
+          fullName:
+            type: string
+            minLength: 2
+            maxLength: 120
+            example: Sofía María López
+          birthDate:
+            type: string
+            format: date
+            example: '2015-03-14'
+          grade:
+            type: string
+            minLength: 1
+            maxLength: 80
+            example: 6.º grado
+      StudentAccountRequest:
+        type: object
+        required: [email, password, confirmPassword]
+        properties:
+          email:
+            type: string
+            format: email
+            maxLength: 254
+            example: sofia.lopez@example.com
+          password:
+            type: string
+            minLength: 8
+            description: Debe incluir al menos una letra y un número.
+            example: Alumna2026
+          confirmPassword:
+            type: string
+            example: Alumna2026
+      SubjectRequest:
+        type: object
+        required: [name]
+        properties:
+          name:
+            type: string
+            minLength: 1
+            maxLength: 80
+            example: Ciencias
+      ScheduleRequest:
+        type: object
+        required: [dayOfWeek, startTime, endTime]
+        properties:
+          subjectId:
+            type: string
+            nullable: true
+            example: cm7x1subject001
+          dayOfWeek:
+            type: string
+            enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+            example: monday
+          startTime:
+            type: string
+            pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$'
+            example: '16:00'
+          endTime:
+            type: string
+            pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$'
+            example: '17:00'
+      TaskCreateRequest:
+        type: object
+        required: [title, type]
+        properties:
+          subjectId:
+            type: string
+            nullable: true
+            example: cm7x1subject001
+          title:
+            type: string
+            minLength: 1
+            maxLength: 180
+            example: Lectura de ciencias
+          description:
+            type: string
+            nullable: true
+            maxLength: 10000
+            example: Leer el capítulo sobre los ecosistemas.
+          type:
+            type: string
+            enum: [homework, exam, reading]
+            example: reading
+          createQuiz:
+            type: boolean
+            description: Si es true, solicita generar un cuestionario; requiere materia.
+            example: true
+          dueAt:
+            type: string
+            format: date-time
+            nullable: true
+            example: '2026-11-20T23:59:00.000Z'
+          status:
+            type: string
+            enum: [pending, in_progress, completed]
+            example: pending
+      TaskUpdateRequest:
+        type: object
+        minProperties: 1
+        properties:
+          subjectId:
+            type: string
+            nullable: true
+            example: cm7x1subject001
+          title:
+            type: string
+            minLength: 1
+            maxLength: 180
+            example: Lectura de ecosistemas
+          description:
+            type: string
+            nullable: true
+            maxLength: 10000
+            example: Leer el capítulo 3.
+          type:
+            type: string
+            enum: [homework, exam, reading]
+            example: homework
+          dueAt:
+            type: string
+            format: date-time
+            nullable: true
+            example: '2026-11-21T23:59:00.000Z'
+          status:
+            type: string
+            enum: [pending, in_progress, completed]
+            example: in_progress
+      NotificationPreferencesRequest:
+        type: object
+        required: [emailSummary, reminderTime]
+        properties:
+          emailSummary:
+            type: boolean
+            example: true
+          reminderTime:
+            type: string
+            nullable: true
+            pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$'
+            example: '18:30'
+      TaskStatusRequest:
+        type: object
+        required: [status]
+        properties:
+          status:
+            type: string
+            enum: [pending, in_progress, completed]
+            example: in_progress
+      LearningArtifactRequest:
+        type: object
+        required: [type]
+        properties:
+          type:
+            type: string
+            enum: [summary, practice, podcast, video]
+            example: summary
+          attachmentId:
+            type: string
+            minLength: 1
+            example: cm7x1attachment001
+      PracticeSubmitRequest:
+        type: object
+        required: [token, answers]
+        properties:
+          token:
+            type: string
+            minLength: 1
+            description: Token de práctica devuelto por `/api/student/practice/start`.
+            example: eyJhbGciOiJIUzI1NiJ9.ejE...
+          answers:
+            type: array
+            minItems: 1
+            maxItems: 5
+            items:
+              type: integer
+              minimum: 0
+              maximum: 3
+            example: [0, 2, 1, 3, 0]
+      TutorConversationRequest:
+        type: object
+        required: [subjectId]
+        properties:
+          subjectId:
+            type: string
+            minLength: 1
+            example: cm7x1subject001
+    responses:
+      BadRequest:
+        description: Solicitud inválida, datos no válidos o archivo no aceptado.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: VALIDATION
+                message: Revisa los datos ingresados
+                fields:
+                  email: [Ingresa un correo válido]
+      Unauthorized:
+        description: Falta una sesión válida o las credenciales/token no son válidos.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: UNAUTHORIZED
+                message: Inicia sesión para continuar
+      Forbidden:
+        description: El usuario autenticado no tiene permiso para esta operación.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: FORBIDDEN
+                message: No tienes permiso para esta acción
+      NotFound:
+        description: No se encontró el recurso solicitado.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: NOT_FOUND
+                message: No encontramos el recurso solicitado
+      Conflict:
+        description: La operación entra en conflicto con el estado actual del recurso.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: CONFLICT
+                message: La operación no se puede completar en el estado actual
+      RateLimited:
+        description: Se superó el límite temporal de solicitudes.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: RATE_LIMITED
+                message: Demasiados intentos. Espera un momento.
+      PayloadTooLarge:
+        description: El archivo excede el límite de 10 MB.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: FILE_TOO_LARGE
+                message: El archivo supera el límite de 10 MB
+      ServiceUnavailable:
+        description: El servicio de correo u otro servicio requerido no está configurado.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: EMAIL_NOT_CONFIGURED
+                message: El servicio de correo no está configurado
+      InternalServerError:
+        description: Error inesperado del servidor.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error:
+                code: INTERNAL
+                message: Ocurrió un error inesperado
