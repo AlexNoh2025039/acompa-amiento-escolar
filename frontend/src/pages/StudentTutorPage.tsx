@@ -7,7 +7,6 @@ import { DashboardLayout, DashboardModule } from '../components/DashboardLayout'
 import type { DashboardNavItem } from '../components/DashboardLayout'
 
 type Subject = { id: string; name: string }
-type AiQuota = { limit: number; used: number; remaining: number; resetsAt: string | null }
 type TutorMessage = {
   id: string
   role: 'student' | 'assistant'
@@ -58,7 +57,6 @@ export function StudentTutorPage() {
   const [creating, setCreating] = useState(false)
   const [sending, setSending] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [quota, setQuota] = useState<AiQuota | null>(null)
   const [error, setError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -66,16 +64,14 @@ export function StudentTutorPage() {
     let cancelled = false
     async function load() {
       try {
-        const [studentData, history, usage] = await Promise.all([
+        const [studentData, history] = await Promise.all([
           apiRequest<{ subjects: Subject[] }>('/api/student/me'),
           apiRequest<{ conversations: Conversation[] }>('/api/student/tutor/conversations'),
-          apiRequest<{ usage: AiQuota }>('/api/student/ai/usage'),
         ])
         if (cancelled) return
         setSubjects(studentData.subjects)
         setSubjectId(studentData.subjects[0]?.id ?? '')
         setConversations(history.conversations)
-        setQuota(usage.usage)
         if (history.conversations[0]) {
           setSelectedId(history.conversations[0].id)
         }
@@ -181,8 +177,6 @@ export function StudentTutorPage() {
         )
         return updated.sort((first, second) => second.updatedAt.localeCompare(first.updatedAt))
       })
-      const usage = await apiRequest<{ usage: AiQuota }>('/api/student/ai/usage')
-      setQuota(usage.usage)
       setDraft('')
       setAttachment(null)
     } catch (sendError) {
@@ -229,14 +223,8 @@ export function StudentTutorPage() {
         </header>
 
         <p className="student-tutor-notice rounded-lg border border-secondary/50 bg-card p-3 text-sm text-tertiary/80" role="note">
-          💡 Puedes escribir una pregunta o subir una foto de tu ejercicio. Para darte pistas, tu pregunta, el archivo y tu grado se envían a Google Gemini. No escribas tu dirección, teléfono ni contraseña. Solo tú puedes leer tus conversaciones; se borran después de 30 días sin actividad.
+          💡 Puedes usar el tutor sin cupo diario de la aplicación: escribe una pregunta o sube una foto de tu ejercicio. Para darte pistas, tu pregunta, el archivo y tu grado se envían a Google Gemini. No escribas tu dirección, teléfono ni contraseña. Solo tú puedes leer tus conversaciones; se borran después de 30 días sin actividad.
         </p>
-        {quota ? (
-          <p className="rounded-lg border border-line bg-card p-3 text-sm text-tertiary/80">
-            Te quedan {quota.remaining} de {quota.limit} ayudas con IA para hoy. Se comparten entre el tutor, la práctica y tus materiales de estudio.
-          </p>
-        ) : null}
-
         {error ? <p className="rounded-md bg-card p-3 text-sm text-accent" role="alert">{error}</p> : null}
 
         <div id="tutor" className="student-tutor-grid grid scroll-mt-32 gap-5 lg:grid-cols-[280px_1fr]">

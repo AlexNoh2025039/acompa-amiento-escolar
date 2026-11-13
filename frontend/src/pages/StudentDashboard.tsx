@@ -82,13 +82,6 @@ type LearningArtifact = {
   fileUrl: string | null
   subject: Subject
 }
-type AiQuota = {
-  limit: number
-  used: number
-  remaining: number
-  resetsAt: string | null
-}
-
 const weekDays = [
   { id: 'monday', label: 'Lunes' },
   { id: 'tuesday', label: 'Martes' },
@@ -179,7 +172,6 @@ export function StudentDashboard() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [attempts, setAttempts] = useState<PracticeAttempt[]>([])
   const [artifacts, setArtifacts] = useState<LearningArtifact[]>([])
-  const [quota, setQuota] = useState<AiQuota | null>(null)
   const [artifactTypes, setArtifactTypes] = useState<Record<string, ArtifactType>>({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -243,18 +235,16 @@ export function StudentDashboard() {
     let cancelled = false
     async function load() {
       try {
-        const [studentResult, resultHistory, artifactResult, usageResult] = await Promise.all([
+        const [studentResult, resultHistory, artifactResult] = await Promise.all([
           apiRequest<StudentData>('/api/student/me'),
           apiRequest<{ evaluations: Evaluation[]; attempts: PracticeAttempt[] }>('/api/student/results'),
           apiRequest<{ artifacts: LearningArtifact[] }>('/api/student/learning-artifacts'),
-          apiRequest<{ usage: AiQuota }>('/api/student/ai/usage'),
         ])
         if (!cancelled) {
           setData(studentResult)
           setEvaluations(resultHistory.evaluations)
           setAttempts(resultHistory.attempts)
           setArtifacts(artifactResult.artifacts)
-          setQuota(usageResult.usage)
           setQuizSubjectId(studentResult.subjects[0]?.id ?? '')
         }
       } catch (loadError) {
@@ -349,8 +339,6 @@ export function StudentDashboard() {
         },
       )
       setArtifacts((current) => [result.artifact, ...current])
-      const usage = await apiRequest<{ usage: AiQuota }>('/api/student/ai/usage')
-      setQuota(usage.usage)
     }, 'Material listo. ¡Úsalo para estudiar!')
   }
 
@@ -486,20 +474,6 @@ export function StudentDashboard() {
 
         {error ? <p className="rounded-md bg-card p-3 text-sm text-accent" role="alert">{error}</p> : null}
         {message ? <p className="rounded-md bg-card p-3 text-sm text-success" role="status">{message}</p> : null}
-
-        {quota ? (
-          <DashboardModule id="inicio">
-          <section className={`${cardClass} flex flex-wrap items-center justify-between gap-3`} aria-live="polite">
-            <div>
-              <p className="font-bold">Ayuda para estudiar</p>
-              <p className="text-sm text-tertiary/75">
-                Te quedan {quota.remaining} de {quota.limit} ayudas con IA para hoy. Se comparten entre el tutor y otros materiales; no limitan los cuestionarios.
-              </p>
-            </div>
-            <span className="rounded-full bg-page px-3 py-1 text-sm font-semibold">{quota.remaining} restantes</span>
-          </section>
-          </DashboardModule>
-        ) : null}
 
         <DashboardModule id="inicio">
         <section className={`${cardClass} scroll-mt-32 border-l-4 border-l-secondary`}>
@@ -701,7 +675,7 @@ export function StudentDashboard() {
                       <button
                         type="button"
                         className={secondaryButton}
-                        disabled={busy || ((quota?.remaining ?? 1) < 1 && (artifactTypes[task.id] ?? 'summary') !== 'practice')}
+                        disabled={busy}
                         onClick={() => void handleGenerateArtifact(task)}
                       >
                         Crear con IA

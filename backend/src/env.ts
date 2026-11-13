@@ -22,7 +22,6 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().trim().optional().transform((value) => value || undefined),
   GEMINI_MODEL: z.string().trim().min(1).default('gemini-3-flash-preview'),
   GEMINI_TTS_MODEL: z.string().trim().min(1).default('gemini-3.8-flash-tts'),
-  AI_DAILY_LIMIT: z.coerce.number().int().positive().default(5),
   FFMPEG_PATH: z.string().trim().optional().transform((value) => value || undefined),
   VIDEO_FONT_PATH: z.string().trim().optional().transform((value) => value || undefined),
   SMTP_HOST: z.string().trim().optional().transform((value) => value || undefined),

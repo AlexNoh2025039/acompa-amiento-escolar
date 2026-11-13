@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app'
 import { env } from '../src/env'
 import { prisma } from '../src/lib/prisma'
-import { reserveAiUsage } from '../src/services/aiQuotaService'
+import { recordAiUsage } from '../src/services/aiUsageService'
 import { practiceQuestions } from '../src/modules/student/practiceQuestions'
 
 const app = createApp()
@@ -437,8 +437,7 @@ describe('student dashboard API', () => {
         .send({ email: 'alex@example.com', password: 'alumno1234' })
         .expect(200)
       expect((await student.get('/api/student/ai/usage').expect(200)).body.usage).toMatchObject({
-        used: 5,
-        remaining: 0,
+        unlimited: true,
       })
       const assignedQuiz = await student
         .post('/api/student/practice/start')
@@ -454,8 +453,7 @@ describe('student dashboard API', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
       expect(await prisma.aiUsage.count({ where: { userId: studentUser.id } })).toBe(8)
       expect((await student.get('/api/student/ai/usage').expect(200)).body.usage).toMatchObject({
-        used: 5,
-        remaining: 0,
+        unlimited: true,
       })
     } finally {
       generation.restore()
@@ -574,7 +572,7 @@ describe('student dashboard API', () => {
     await orphanAgent.get('/api/student/me').expect(403)
   })
 
-  it('enforces the shared daily AI quota for each student', async () => {
+  it('allows students to use AI without a daily quota', async () => {
     const parentAgent = request.agent(app)
     await parentAgent
       .post('/api/auth/register')
@@ -588,19 +586,6 @@ describe('student dashboard API', () => {
       .post(`/api/families/me/children/${child.body.child.id}/account`)
       .send({ email: 'alex@example.com', password: 'alumno1234', confirmPassword: 'alumno1234' })
       .expect(201)
-    const subject = await parentAgent
-      .post(`/api/families/me/children/${child.body.child.id}/subjects`)
-      .send({ name: 'Ciencias' })
-      .expect(201)
-    const task = await parentAgent
-      .post(`/api/families/me/children/${child.body.child.id}/tasks`)
-      .send({
-        title: 'Repaso',
-        type: 'homework',
-        subjectId: subject.body.subject.id,
-        description: 'Repasa conceptos de ciencias.',
-      })
-      .expect(201)
     const studentUser = await prisma.user.findUniqueOrThrow({ where: { email: 'alex@example.com' } })
     const student = request.agent(app)
     await student
@@ -608,34 +593,20 @@ describe('student dashboard API', () => {
       .send({ email: 'alex@example.com', password: 'alumno1234' })
       .expect(200)
     expect((await student.get('/api/student/ai/usage').expect(200)).body.usage).toMatchObject({
-      limit: 5,
-      used: 0,
-      remaining: 5,
+      unlimited: true,
     })
 
     await prisma.aiUsage.createMany({
       data: Array.from({ length: 5 }, () => ({ userId: studentUser.id, purpose: 'summary' as const })),
     })
-    expect((await student.get('/api/student/ai/usage').expect(200)).body.usage.remaining).toBe(0)
-    const blocked = await student
-      .post(`/api/student/tasks/${task.body.task.id}/learning-artifacts`)
-      .send({ type: 'summary' })
-      .expect(429)
-    expect(blocked.body.error.code).toBe('AI_DAILY_LIMIT')
-  })
-
-  it('does not let concurrent requests reserve more than the daily AI limit', async () => {
-    const registered = await request(app)
-      .post('/api/auth/register')
-      .send(parent('parent@example.com', 'Padre Ejemplo'))
-      .expect(201)
-    const userId = registered.body.user.id as string
-    const reservations = await Promise.allSettled(
-      Array.from({ length: 8 }, () => reserveAiUsage(userId, 'summary')),
+    const records = await Promise.all(
+      Array.from({ length: 8 }, () => recordAiUsage(studentUser.id, 'summary')),
     )
-    expect(reservations.filter((result) => result.status === 'fulfilled')).toHaveLength(5)
-    expect(reservations.filter((result) => result.status === 'rejected')).toHaveLength(3)
-    expect(await prisma.aiUsage.count({ where: { userId } })).toBe(5)
+    expect(records).toHaveLength(8)
+    expect(await prisma.aiUsage.count({ where: { userId: studentUser.id } })).toBe(13)
+    expect((await student.get('/api/student/ai/usage').expect(200)).body.usage).toMatchObject({
+      unlimited: true,
+    })
   })
 
   it('keeps generated practice answers private until submitted and grades them server-side', async () => {

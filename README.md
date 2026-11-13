@@ -48,7 +48,7 @@ Para usar PostgreSQL instalado en Windows con pgAdmin:
 
 ## Servicios opcionales de Fase 4
 
-- **IA:** configura `GEMINI_API_KEY`. `AI_DAILY_LIMIT=5` aplica una cuota móvil y compartida por alumno entre tutor, resúmenes, práctica, audio y video. El acceso a Gemini sin clave devuelve un error explícito.
+- **IA:** configura `GEMINI_API_KEY`. La aplicación no impone un cupo diario de uso de IA a los alumnos; el proveedor puede aplicar sus propias cuotas o límites. El acceso a Gemini sin clave devuelve un error explícito.
 - **Correo:** configura `SMTP_HOST`, `SMTP_FROM` y, si el servidor los exige, `SMTP_USER` y `SMTP_PASS`. Los enlaces de restablecimiento vencen en 30 minutos, son de un solo uso y no revelan si un correo está registrado.
 - **Archivos:** el desarrollo usa `STORAGE_PROVIDER=local` y guarda adjuntos/materiales fuera de `frontend/public`. Para despliegue, configura un bucket S3-compatible privado, `STORAGE_PROVIDER=s3` y sus credenciales en el backend. No hagas público el bucket.
 - **Migración de adjuntos:** configura S3 y ejecuta `pnpm --filter @aischool/backend uploads:migrate-to-s3` para copiar los adjuntos existentes. Comprueba los archivos copiados; solo añade `-- --delete-local` cuando quieras borrar las copias locales.
@@ -85,7 +85,7 @@ Routers y controllers Express organizan la API; el frontend se puede iniciar de 
 - **Fase 1:** panel familiar para hijos, materias, horarios, tareas, adjuntos, evaluaciones y preferencias.
 - **Fase 2:** acceso del alumno, tareas del día, horario, prácticas y resultados.
 - **Fase 3:** tutor escolar paso a paso con Gemini y conversaciones privadas con retención limitada.
-- **Fase 4:** almacenamiento local/S3 privado, copia de adjuntos a S3, cuota compartida de IA, resúmenes y prácticas generadas, podcasts narrados, videos didácticos MP4, restablecimiento de contraseña y eliminación de cuenta/archivos.
+- **Fase 4:** almacenamiento local/S3 privado, copia de adjuntos a S3, uso de IA sin cupo diario en la aplicación, resúmenes y prácticas generadas, podcasts narrados, videos didácticos MP4, restablecimiento de contraseña y eliminación de cuenta/archivos.
 
 La voz del resumen diario del panel sigue siendo local al navegador. Los recursos generados mediante IA sí se envían a Google Gemini desde el servidor; el nombre, correo e identificadores del alumno no se incluyen en el prompt.
 

@@ -7,7 +7,7 @@ import {
   readPrivateFile,
   saveGeneratedFile,
 } from '../modules/families/uploads'
-import { reserveAiUsage, releaseAiUsage } from './aiQuotaService'
+import { recordAiUsage, releaseAiUsage } from './aiUsageService'
 import { generateGeminiSpeech, generateGeminiText, type GeminiPart } from './geminiService'
 import { renderNarratedVideo, wavFromPcm } from './videoRenderer'
 
@@ -203,7 +203,7 @@ export async function createLearningArtifact(input: {
 
   const reservation = input.type === 'practice'
     ? null
-    : await reserveAiUsage(input.userId, generationType[input.type])
+    : await recordAiUsage(input.userId, generationType[input.type])
   let modelCalledSuccessfully = false
   let title = `${task.subject.name}: ${task.title}`
   let content = ''

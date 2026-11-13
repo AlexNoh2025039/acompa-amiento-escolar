@@ -1,6 +1,6 @@
 import { generateGeminiText } from '../../services/geminiService'
 import type { GeminiPart } from '../../services/geminiService'
-import { withAiUsage } from '../../services/aiQuotaService'
+import { withAiUsage } from '../../services/aiUsageService'
 
 export type TutorTurn = {
   role: 'student' | 'assistant'

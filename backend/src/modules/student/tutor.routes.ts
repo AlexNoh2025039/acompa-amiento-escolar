@@ -1,8 +1,5 @@
 import { Router } from 'express'
-import rateLimit from 'express-rate-limit'
-import type { RequestHandler } from 'express'
 import { z } from 'zod'
-import { env } from '../../env'
 import { AppError } from '../../lib/errors'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { prisma } from '../../lib/prisma'
@@ -19,24 +16,6 @@ import { processStorageDeletionQueue } from '../../services/storageDeletionServi
 import { generateTutorReply } from './geminiTutor'
 import { getStudentChild } from './student.service'
 import { deleteTutorConversation, purgeExpiredTutorConversations } from './tutor-retention'
-
-const passthrough: RequestHandler = (_req, _res, next) => next()
-const tutorRateLimit: RequestHandler =
-  env.NODE_ENV === 'test'
-    ? passthrough
-    : rateLimit({
-        windowMs: 15 * 60 * 1000,
-        limit: 20,
-        keyGenerator: (req) => req.user!.id,
-        standardHeaders: true,
-        legacyHeaders: false,
-        message: {
-          error: {
-            code: 'RATE_LIMITED',
-            message: 'Has enviado muchas preguntas. Espera un momento antes de continuar.',
-          },
-        },
-      })
 
 const createConversationSchema = z.object({
   subjectId: z.string().min(1),
@@ -100,7 +79,6 @@ tutorRouter.get(
 
 tutorRouter.post(
   '/conversations',
-  tutorRateLimit,
   validateBody(createConversationSchema),
   asyncHandler(async (req, res) => {
     await purgeExpiredTutorConversations()
@@ -199,7 +177,6 @@ tutorRouter.get(
 
 tutorRouter.post(
   '/conversations/:conversationId/messages',
-  tutorRateLimit,
   taskFileUpload,
   asyncHandler(async (req, res) => {
     await purgeExpiredTutorConversations()

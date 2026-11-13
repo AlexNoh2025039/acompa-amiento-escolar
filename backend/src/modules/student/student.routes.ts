@@ -11,7 +11,6 @@ import { validateBody } from '../../middleware/validate'
 import { getStudentChild } from './student.service'
 import { getTaskReadingContent, parseTaskQuiz, practiceQuestionSchema } from './taskQuiz'
 import { tutorRouter } from './tutor.routes'
-import { getAiQuota } from '../../services/aiQuotaService'
 import { createLearningArtifact, generateAcademicPractice } from '../../services/learningContentService'
 import { practiceQuestions } from './practiceQuestions'
 
@@ -36,8 +35,8 @@ studentRouter.use('/tutor', tutorRouter)
 
 studentRouter.get(
   '/ai/usage',
-  asyncHandler(async (req, res) => {
-    res.json({ usage: await getAiQuota(req.user!.id) })
+  asyncHandler(async (_req, res) => {
+    res.json({ usage: { unlimited: true } })
   }),
 )
 

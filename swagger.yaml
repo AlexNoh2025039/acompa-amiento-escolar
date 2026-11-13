@@ -1195,17 +1195,15 @@
     /api/student/ai/usage:
       get:
         tags: [Estudiantes]
-        summary: Consultar el uso de funciones de inteligencia artificial
+        summary: Consultar la disponibilidad de funciones de inteligencia artificial
         responses:
           '200':
-            description: Cuota de IA del estudiante.
+            description: El estudiante puede usar las funciones de IA sin un cupo diario de la aplicación.
             content:
               application/json:
                 example:
                   usage:
-                    used: 2
-                    limit: 5
-                    remaining: 3
+                    unlimited: true
           '401':
             $ref: '#/components/responses/Unauthorized'
           '403':
