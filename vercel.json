@@ -4,6 +4,26 @@
     {
       "source": "/api/:path*",
       "destination": "https://acompa-amiento-escolar-api.onrender.com/api/:path*"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/register",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forgot-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tutor",
+      "destination": "/index.html"
     }
   ]
 }
